@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prisoner's Dilemma — Multiplayer</title>
+    <style>
+        /* ─────────────── RESET ─────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0b0b1a;
+            --surface: #141428;
+            --surface2: #1e1e38;
+            --accent: #00d2ff;
+            --accent2: #7b2ff7;
+            --green: #00e676;
+            --red: #ff1744;
+            --gold: #ffd740;
+            --text: #e8e8f0;
+            --dim: #777;
+            --radius: 14px;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* ─────────────── HEADER ─────────────── */
+        .header {
+            text-align: center;
+            padding: 36px 20px 10px;
+        }
+        .header h1 {
+            font-size: 2.2rem;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--dim); margin-top: 4px; font-size: 0.95rem; }
+
+        /* ─────────────── SCREENS (one visible at a time) ─────────────── */
+        .screen {
+            display: none;
+            width: 100%;
+            max-width: 560px;
+            padding: 24px 20px;
+            animation: fadeUp 0.35s ease;
+        }
+        .screen.active { display: block; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─────────────── CARD ─────────────── */
+        .card {
+            background: var(--surface);
+            border: 1px solid #2a2a48;
+            border-radius: var(--radius);
+            padding: 28px 24px;
+            margin-bottom: 18px;
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+            color: var(--accent);
+        }
+
+        /* ─────────────── INPUTS ─────────────── */
+        .input-group {
+            margin-bottom: 16px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--dim);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #333;
+            border-radius: 10px;
+            background: var(--surface2);
+            color: var(--text);
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-group input:focus { border-color: var(--accent); }
+        .input-group input::placeholder { color: #555; }
+
+        /* ─────────────── BUTTONS ─────────────── */
+        .btn {
+            border: none;
+            padding: 13px 32px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.4px;
+            width: 100%;
+            margin-top: 6px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
+        .btn:active { transform: translateY(0); }
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: #fff;
+        }
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid #444;
+            margin-top: 10px;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        .btn-row .btn { flex: 1; }
+
+        /* ─────────────── ROOM CODE DISPLAY ─────────────── */
+        .room-code-display {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .room-code-display .code {
+            display: inline-block;
+            font-size: 2.6rem;
+            font-weight: 800;
+            letter-spacing: 8px;
+            color: var(--gold);
+            background: var(--surface2);
+            padding: 14px 32px;
+            border-radius: 12px;
+            border: 2px dashed var(--gold);
+            user-select: all;
+        }
+        .room-code-display p { color: var(--dim); margin-top: 10px; font-size: 0.9rem; }
+
+        /* ─────────────── WAITING SPINNER ─────────────── */
+        .waiting {
+            text-align: center;
+            padding: 30px 0;
+        }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid #333;
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .waiting p { color: var(--dim); font-size: 1rem; }
+
+        /* ─────────────── GAME SCREEN ─────────────── */
+        .round-badge {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .round-badge .round-num {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .round-badge .sub {
+            font-size: 0.85rem;
+            color: var(--dim);
+            margin-top: 2px;
+        }
+
+        .vs-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            font-size: 1rem;
+        }
+        .vs-bar .you { color: var(--green); font-weight: 700; }
+        .vs-bar .opp { color: var(--red); font-weight: 700; }
+        .vs-bar .vs  { color: var(--dim); font-size: 0.85rem; }
+
+        /* ─── CHOICE BUTTONS ─── */
+        .choice-area {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .choice-card {
+            flex: 1;
+            background: var(--surface2);
+            border: 3px solid transparent;
+            border-radius: 14px;
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+        .choice-card:hover { border-color: #555; transform: translateY(-3px); }
+        .choice-card.selected-collab { border-color: var(--green); background: rgba(0,230,118,0.1); }
+        .choice-card.selected-defect { border-color: var(--red); background: rgba(255,23,68,0.1); }
+        .choice-card.disabled { pointer-events: none; opacity: 0.4; }
+
+        .choice-card .icon { font-size: 2.4rem; margin-bottom: 8px; }
+        .choice-card .label { font-size: 1.1rem; font-weight: 700; }
+        .choice-card .desc { font-size: 0.78rem; color: var(--dim); margin-top: 4px; }
+
+        /* ─── STATUS LINE ─── */
+        .status-line {
+            text-align: center;
+            min-height: 36px;
+            padding: 8px;
+            font-size: 0.95rem;
+            color: var(--gold);
+        }
+        .status-line.subtle { color: var(--dim); }
+
+        /* ─── ROUND RESULT POPUP ─── */
+        .round-result-card {
+            background: var(--surface2);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            margin: 16px 0;
+            animation: fadeUp 0.3s ease;
+        }
+        .round-result-card h3 { color: var(--accent); margin-bottom: 12px; font-size: 1.1rem; }
+        .result-row {
+            display: flex;
+            justify-content: space-around;
+            gap: 12px;
+        }
+        .result-player {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.03);
+        }
+        .result-player .pname { font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
+        .result-player .pchoice { font-size: 0.85rem; margin-bottom: 2px; }
+        .result-player .ppts { font-size: 1.2rem; font-weight: 700; }
+
+        .collab-text { color: var(--green); }
+        .defect-text { color: var(--red); }
+
+        /* ─────────────── FINAL RESULTS SCREEN ─────────────── */
+        .trophy { text-align: center; font-size: 4rem; margin-bottom: 10px; }
+
+        .final-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 24px;
+            border: 1px solid #2a2a48;
+        }
+        .ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14px;
+        }
+        .ranking-table th, .ranking-table td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #2a2a48;
+        }
+        .ranking-table th {
+            color: var(--accent);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .ranking-table tr.winner td {
+            background: rgba(255,215,64,0.08);
+            font-weight: 700;
+        }
+        .ranking-table .rank-medal { font-size: 1.4rem; }
+        .ranking-table .score-val { color: var(--gold); font-size: 1.2rem; font-weight: 700; }
+
+        /* History in final */
+        .history-section { margin-top: 24px; }
+        .history-section h3 { color: var(--accent); font-size: 1rem; margin-bottom: 10px; text-align: center; }
+        .history-round {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            background: var(--surface2);
+            font-size: 0.85rem;
+        }
+        .history-round .hr-num { color: var(--dim); width: 70px; }
+        .history-round .hr-choices { flex: 1; text-align: center; }
+        .history-round .hr-pts { width: 100px; text-align: right; color: var(--dim); }
+
+        /* ─────────────── ERROR ─────────────── */
+        .error-msg {
+            color: var(--red);
+            font-size: 0.88rem;
+            text-align: center;
+            min-height: 22px;
+            margin-top: 8px;
+        }
+
+        /* ─────────────── PAYOFF REFERENCE ─────────────── */
+        .payoff-ref {
+            margin-top: 16px;
+            font-size: 0.78rem;
+            color: var(--dim);
+            text-align: center;
+            line-height: 1.6;
+        }
+        .payoff-ref table {
+            margin: 8px auto;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+        }
+        .payoff-ref th, .payoff-ref td {
+            border: 1px solid #333;
+            padding: 6px 10px;
+            text-align: center;
+        }
+        .payoff-ref th { background: var(--surface2); color: var(--accent); }
+
+        /* ─────────────── RESPONSIVE ─────────────── */
+        @media (max-width: 500px) {
+            .header h1 { font-size: 1.6rem; }
+            .room-code-display .code { font-size: 1.8rem; letter-spacing: 5px; padding: 10px 20px; }
+            .choice-card .icon { font-size: 1.8rem; }
+            .choice-card .label { font-size: 0.95rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🎲 Prisoner's Dilemma</h1>
+    <p>Real-time Multiplayer</p>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SCREEN 1 — LOBBY (Create or Join)
+     ══════════════════════════════════════════════ -->
+<div class="screen active" id="screen-lobby">
+    <div class="card">
+        <h2>🎮 Enter the Game</h2>
+
+        <div class="input-group">
+            <label>Your Name</label>
+            <input type="text" id="inputName" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+        </div>
+
+        <button class="btn btn-primary" id="btnCreate" onclick="createRoom()">Create New Room</button>
+
+        <div style="text-align:center; margin: 18px 0 12px; color:var(--dim); font-size:0.85rem;">— or join an existing room —</div>
+
+        <div class="input-group">
+            <label>Room Code</label>
+            <input type="text" id="inputCode" placeholder="Enter 5-letter room code..." maxlength="5" autocomplete="off" style="text-transform:uppercase; letter-spacing:3px; text-align:center;">
+        </div>
+
+        <button class="btn btn-secondary" id="btnJoin" onclick="joinRoom()">Join Room</button>
+
+        <div class="error-msg" id="lobbyError"></div>
+    </div>
+
+    <!-- Payoff reference -->
+    <div class="payoff-ref">
+        <strong>Payoff Matrix (Your pts, Their pts)</strong>
+        <table>
+            <tr><th></th><th>They Collaborate</th><th>They Defect</th></tr>
+            <tr><th>You Collaborate</th><td>3 , 3</td><td>0 , 5</td></tr>
+            <tr><th>You Defect</th><td>5 , 0</td><td>1 , 1</td></tr>
+        </table>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SCREEN 2 — WAITING FOR OPPONENT
+     ══════════════════════════════════════════════ -->
+<div class="screen" id="screen-waiting">
+    <div class="card">
+        <h2>🕐 Waiting for Opponent</h2>
+        <div class="room-code-display">
+            <p>Share this room code with your opponent:</p>
+            <div class="code" id="displayRoomCode">-----</div>
+            <p>They'll enter this code to join your game.</p>
+        </div>
+        <div class="waiting">
+            <div class="spinner"></div>
+            <p>Waiting for player 2 to join...</p>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SCREEN 3 — GAME (Rounds)
+     ══════════════════════════════════════════════ -->
+<div class="screen" id="screen-game">
+    <div class="card">
+        <div class="round-badge">
+            <div class="round-num" id="roundLabel">Round 1</div>
+            <div class="sub">Make your choice — opponent can't see it until both lock in</div>
+        </div>
+
+        <div class="vs-bar">
+            <span class="you" id="youName">You</span>
+            <span class="vs">⚔️ VS</span>
+            <span class="opp" id="oppName">Opponent</span>
+        </div>
+
+        <div class="choice-area" id="choiceArea">
+            <div class="choice-card" id="cardCollab" onclick="selectChoice('collaborate')">
+                <div class="icon">🤝</div>
+                <div class="label">Collaborate</div>
+                <div class="desc">Mutual trust for shared gain</div>
+            </div>
+            <div class="choice-card" id="cardDefect" onclick="selectChoice('defect')">
+                <div class="icon">🗡️</div>
+                <div class="label">Defect</div>
+                <div class="desc">Betray for personal gain</div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" id="btnLock" onclick="lockChoice()" disabled>🔒 Lock In Choice</button>
+
+        <div class="status-line" id="gameStatus"></div>
+
+        <!-- Round result appears here -->
+        <div id="roundResultArea"></div>
+    </div>
+
+    <!-- Payoff reference -->
+    <div class="payoff-ref">
+        <table>
+            <tr><th></th><th>They Collaborate</th><th>They Defect</th></tr>
+            <tr><th>You Collaborate</th><td>3 , 3</td><td>0 , 5</td></tr>
+            <tr><th>You Defect</th><td>5 , 0</td><td>1 , 1</td></tr>
+        </table>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SCREEN 4 — FINAL RESULTS
+     ══════════════════════════════════════════════ -->
+<div class="screen" id="screen-results">
+    <div class="trophy">🏆</div>
+
+    <div class="final-card">
+        <h2 style="text-align:center; color:var(--gold); margin-bottom:4px;" id="resultTitle">Game Over!</h2>
+        <p style="text-align:center; color:var(--dim); font-size:0.9rem;" id="resultSubtitle"></p>
+
+        <table class="ranking-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Player</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody id="rankingBody"></tbody>
+        </table>
+
+        <div class="history-section">
+            <h3>📜 Round-by-Round History</h3>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <button class="btn btn-primary" style="margin-top:20px;" onclick="backToLobby()">🔄 Play Again</button>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SCREEN 5 — DISCONNECTED
+     ══════════════════════════════════════════════ -->
+<div class="screen" id="screen-disconnected">
+    <div class="card" style="text-align:center;">
+        <h2 style="color:var(--red);">😔 Opponent Disconnected</h2>
+        <p style="color:var(--dim); margin:16px 0;">Your opponent left the game.</p>
+        <button class="btn btn-primary" onclick="backToLobby()">Back to Lobby</button>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     SOCKET.IO + GAME LOGIC
+     ══════════════════════════════════════════════ -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+
+/* ── State ── */
+let myId = null;       // 'P1' or 'P2'
+let myName = '';
+let oppName = '';
+let currentChoice = null;
+let locked = false;
+
+/* ══════════════════════════════════════
+   SCREEN MANAGEMENT
+   ══════════════════════════════════════ */
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(`screen-${id}`).classList.add('active');
+}
+
+/* ══════════════════════════════════════
+   LOBBY ACTIONS
+   ══════════════════════════════════════ */
+function createRoom() {
+    const name = document.getElementById('inputName').value.trim();
+    if (!name) return showLobbyError('Please enter your name.');
+
+    myName = name;
+    disableLobbyButtons();
+
+    socket.emit('create-room', { playerName: name }, (res) => {
+        if (res.success) {
+            myId = res.playerId;
+            document.getElementById('displayRoomCode').textContent = res.roomCode;
+            showScreen('waiting');
+        } else {
+            showLobbyError(res.error);
+            enableLobbyButtons();
+        }
+    });
+}
+
+function joinRoom() {
+    const name = document.getElementById('inputName').value.trim();
+    const code = document.getElementById('inputCode').value.trim().toUpperCase();
+    if (!name) return showLobbyError('Please enter your name.');
+    if (!code || code.length < 4) return showLobbyError('Please enter a valid room code.');
+
+    myName = name;
+    disableLobbyButtons();
+
+    socket.emit('join-room', { roomCode: code, playerName: name }, (res) => {
+        if (res.success) {
+            myId = res.playerId;
+            // Game will start via 'game-started' event
+        } else {
+            showLobbyError(res.error);
+            enableLobbyButtons();
+        }
+    });
+}
+
+function showLobbyError(msg) {
+    document.getElementById('lobbyError').textContent = msg;
+}
+function disableLobbyButtons() {
+    document.getElementById('btnCreate').disabled = true;
+    document.getElementById('btnJoin').disabled = true;
+}
+function enableLobbyButtons() {
+    document.getElementById('btnCreate').disabled = false;
+    document.getElementById('btnJoin').disabled = false;
+}
+
+/* ══════════════════════════════════════
+   SOCKET EVENTS
+   ══════════════════════════════════════ */
+
+/* Game started — both players connected */
+socket.on('game-started', ({ players }) => {
+    const me = players.find(p => p.id === myId);
+    const opp = players.find(p => p.id !== myId);
+    myName = me.name;
+    oppName = opp.name;
+    document.getElementById('youName').textContent = myName;
+    document.getElementById('oppName').textContent = oppName;
+    showScreen('game');
+});
+
+/* New round */
+socket.on('new-round', ({ roundNumber }) => {
+    currentChoice = null;
+    locked = false;
+
+    document.getElementById('roundLabel').textContent = `Round ${roundNumber}`;
+    document.getElementById('roundResultArea').innerHTML = '';
+    document.getElementById('gameStatus').textContent = '';
+    document.getElementById('gameStatus').className = 'status-line';
+
+    // Reset choice cards
+    document.getElementById('cardCollab').className = 'choice-card';
+    document.getElementById('cardDefect').className = 'choice-card';
+    document.getElementById('btnLock').disabled = true;
+    document.getElementById('btnLock').textContent = '🔒 Lock In Choice';
+});
+
+/* Opponent locked in */
+socket.on('opponent-locked', () => {
+    if (!locked) {
+        document.getElementById('gameStatus').textContent = `${oppName} has locked in. Your turn!`;
+    } else {
+        document.getElementById('gameStatus').textContent = 'Both locked in — revealing...';
+    }
+});
+
+/* Round result */
+socket.on('round-result', ({ roundNumber, choices, points }) => {
+    const myChoice = choices[myId];
+    const oppChoice = choices[myId === 'P1' ? 'P2' : 'P1'];
+    const myPts = points[myId];
+    const oppPts = points[myId === 'P1' ? 'P2' : 'P1'];
+
+    const oppId = myId === 'P1' ? 'P2' : 'P1';
+
+    const choiceLabel = (c) => c === 'collaborate' ? '🤝 Collaborate' : '🗡️ Defect';
+    const choiceClass = (c) => c === 'collaborate' ? 'collab-text' : 'defect-text';
+
+    document.getElementById('roundResultArea').innerHTML = `
+        <div class="round-result-card">
+            <h3>Round ${roundNumber} Result</h3>
+            <div class="result-row">
+                <div class="result-player">
+                    <div class="pname">${myName} (You)</div>
+                    <div class="pchoice ${choiceClass(myChoice)}">${choiceLabel(myChoice)}</div>
+                    <div class="ppts">+${myPts}</div>
+                </div>
+                <div class="result-player">
+                    <div class="pname">${oppName}</div>
+                    <div class="pchoice ${choiceClass(oppChoice)}">${choiceLabel(oppChoice)}</div>
+                    <div class="ppts">+${oppPts}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('gameStatus').textContent = 'Next round starting soon...';
+    document.getElementById('gameStatus').className = 'status-line subtle';
+});
+
+/* Game over — show final results */
+socket.on('game-over', ({ results, totalRounds, history }) => {
+    document.getElementById('resultSubtitle').textContent = `${totalRounds} rounds played`;
+
+    const tbody = document.getElementById('rankingBody');
+    tbody.innerHTML = '';
+    results.forEach((r, i) => {
+        const isMe = r.id === myId;
+        const medal = i === 0 ? '🥇' : '🥈';
+        const rowClass = i === 0 ? 'winner' : '';
+        tbody.innerHTML += `
+            <tr class="${rowClass}">
+                <td class="rank-medal">${medal}</td>
+                <td>${r.name}${isMe ? ' (You)' : ''}</td>
+                <td class="score-val">${r.score}</td>
+            </tr>
+        `;
+    });
+
+    // Determine title
+    if (results[0].score === results[1].score) {
+        document.getElementById('resultTitle').textContent = "It's a Tie! 🤝";
+    } else if (results[0].id === myId) {
+        document.getElementById('resultTitle').textContent = 'You Win! 🎉';
+    } else {
+        document.getElementById('resultTitle').textContent = 'You Lost! 😅';
+    }
+
+    // Round history
+    const histDiv = document.getElementById('historyList');
+    histDiv.innerHTML = '';
+    const oppId = myId === 'P1' ? 'P2' : 'P1';
+
+    history.forEach(h => {
+        const myC = h.choices[myId];
+        const opC = h.choices[oppId];
+        const myP = h.points[myId];
+        const opP = h.points[oppId];
+        const cLabel = (c) => c === 'collaborate' ? 'C' : 'D';
+        const cClass = (c) => c === 'collaborate' ? 'collab-text' : 'defect-text';
+
+        histDiv.innerHTML += `
+            <div class="history-round">
+                <span class="hr-num">Round ${h.round}</span>
+                <span class="hr-choices">
+                    ${myName}: <span class="${cClass(myC)}">${cLabel(myC)}</span>
+                    &nbsp;|&nbsp;
+                    ${oppName}: <span class="${cClass(opC)}">${cLabel(opC)}</span>
+                </span>
+                <span class="hr-pts">+${myP} / +${opP}</span>
+            </div>
+        `;
+    });
+
+    showScreen('results');
+});
+
+/* Opponent disconnected */
+socket.on('player-disconnected', () => {
+    showScreen('disconnected');
+});
+
+/* ══════════════════════════════════════
+   CHOICE INTERACTION
+   ══════════════════════════════════════ */
+function selectChoice(choice) {
+    if (locked) return;
+    currentChoice = choice;
+
+    const collab = document.getElementById('cardCollab');
+    const defect = document.getElementById('cardDefect');
+    collab.className = 'choice-card';
+    defect.className = 'choice-card';
+
+    if (choice === 'collaborate') collab.classList.add('selected-collab');
+    else defect.classList.add('selected-defect');
+
+    document.getElementById('btnLock').disabled = false;
+}
+
+function lockChoice() {
+    if (!currentChoice || locked) return;
+    locked = true;
+
+    document.getElementById('btnLock').disabled = true;
+    document.getElementById('btnLock').textContent = '✅ Locked In';
+    document.getElementById('cardCollab').classList.add('disabled');
+    document.getElementById('cardDefect').classList.add('disabled');
+    document.getElementById('gameStatus').textContent = 'Waiting for opponent...';
+
+    socket.emit('submit-choice', { choice: currentChoice }, (res) => {
+        if (!res.success) {
+            document.getElementById('gameStatus').textContent = 'Error: ' + res.error;
+        }
+    });
+}
+
+/* ══════════════════════════════════════
+   PLAY AGAIN
+   ══════════════════════════════════════ */
+function backToLobby() {
+    myId = null;
+    myName = '';
+    oppName = '';
+    currentChoice = null;
+    locked = false;
+    document.getElementById('lobbyError').textContent = '';
+    document.getElementById('inputCode').value = '';
+    enableLobbyButtons();
+    showScreen('lobby');
+}
+
+/* ══════════════════════════════════════
+   ENTER KEY SUPPORT
+   ══════════════════════════════════════ */
+document.getElementById('inputName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') createRoom();
+});
+document.getElementById('inputCode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') joinRoom();
+});
+</script>
+
+</body>
+</html>
