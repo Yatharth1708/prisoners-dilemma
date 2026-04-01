@@ -1,253 +1,187 @@
-/**
- * Prisoner's Dilemma — Multiplayer Server
- *
- * Architecture:
- *   • 2 players join a lobby by entering their name.
- *   • Once both are in, the game starts with a RANDOM number of rounds (3-10).
- *   • Players do NOT know how many rounds remain (hidden).
- *   • Each round both players pick "collaborate" or "defect" simultaneously.
- *   • Choices are hidden from each other until both have submitted.
- *   • Scores are NOT shown during the game — only revealed at the end.
- *   • After all rounds, a final ranking screen is shown to both players.
- *
- * Extendable to 10 pairs later by using room-based architecture.
- */
-
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: '*' },
-});
-
+const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.static(path.join(__dirname, 'public')));
-
-/* ═══════════════════════════════════════════════
-   PAYOFF MATRIX
-   ═══════════════════════════════════════════════ */
-const PAYOFF = {
+var MAX_PLAYERS = 20;
+var TOTAL_ROUNDS = 20;
+var PAYOFF = {
     collaborate: { collaborate: [3, 3], defect: [0, 5] },
-    defect:      { collaborate: [5, 0], defect: [1, 1] },
+    defect: { collaborate: [5, 0], defect: [1, 1] },
 };
-
-/* ═══════════════════════════════════════════════
-   GAME ROOMS — keyed by roomCode
-   ═══════════════════════════════════════════════ */
-const rooms = {}; // { [roomCode]: RoomState }
-
-function createRoom(code) {
-    const totalRounds = 20;
-    return {
-        code,
-        players: [],          // [{ id, name, socketId }]
-        totalRounds,
-        currentRound: 0,
-        rounds: [],           // [{ choices: { [playerId]: choice }, results: { [playerId]: pts } }]
-        scores: {},           // { [playerId]: totalScore }
-        state: 'waiting',     // waiting | playing | finished
-    };
-}
-
+var rooms = {};
 function generateRoomCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var code = '';
+    for (var i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
     return rooms[code] ? generateRoomCode() : code;
 }
-
-/* ═══════════════════════════════════════════════
-   SOCKET HANDLING
-   ═══════════════════════════════════════════════ */
-io.on('connection', (socket) => {
-    console.log(`[+] Connected: ${socket.id}`);
-
-    /* ── CREATE ROOM ── */
-    socket.on('create-room', ({ playerName }, callback) => {
-        const code = generateRoomCode();
-        const room = createRoom(code);
-        const player = { id: 'P1', name: playerName, socketId: socket.id };
-        room.players.push(player);
-        room.scores[player.id] = 0;
+function createRoom(code, hostSocketId) {
+    return { code: code, hostSocketId: hostSocketId, players: [], pairs: [], totalRounds: TOTAL_ROUNDS, currentRound: 0, rounds: [], scores: {}, state: 'waiting' };
+}
+function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+}
+function broadcastPlayerList(roomCode) {
+    var room = rooms[roomCode];
+    if (!room) return;
+    io.to(roomCode).emit('player-list', {
+        players: room.players.map(function(p) { return { id: p.id, name: p.name }; }),
+        hostId: room.players.length > 0 ? room.players[0].id : null,
+        maxPlayers: MAX_PLAYERS,
+    });
+}
+io.on('connection', function(socket) {
+    socket.on('create-room', function(data, callback) {
+        var code = generateRoomCode();
+        var room = createRoom(code, socket.id);
+        var playerId = 'P1';
+        room.players.push({ id: playerId, name: data.playerName.trim(), socketId: socket.id });
+        room.scores[playerId] = 0;
         rooms[code] = room;
-
         socket.join(code);
-        socket.data = { roomCode: code, playerId: 'P1' };
-
-        callback({ success: true, roomCode: code, playerId: 'P1' });
-        console.log(`[ROOM] ${playerName} created room ${code}`);
+        socket.data = { roomCode: code, playerId: playerId };
+        callback({ success: true, roomCode: code, playerId: playerId });
+        broadcastPlayerList(code);
     });
-
-    /* ── JOIN ROOM ── */
-    socket.on('join-room', ({ roomCode, playerName }, callback) => {
-        const code = roomCode.toUpperCase().trim();
-        const room = rooms[code];
-
+    socket.on('join-room', function(data, callback) {
+        var code = data.roomCode.toUpperCase().trim();
+        var room = rooms[code];
         if (!room) return callback({ success: false, error: 'Room not found.' });
-        if (room.players.length >= 2) return callback({ success: false, error: 'Room is full.' });
+        if (room.players.length >= MAX_PLAYERS) return callback({ success: false, error: 'Room is full (max 20).' });
         if (room.state !== 'waiting') return callback({ success: false, error: 'Game already in progress.' });
-
-        const player = { id: 'P2', name: playerName, socketId: socket.id };
-        room.players.push(player);
-        room.scores[player.id] = 0;
-
+        var trimName = data.playerName.trim();
+        var dup = room.players.some(function(p) { return p.name.toLowerCase() === trimName.toLowerCase(); });
+        if (dup) return callback({ success: false, error: 'Name already taken.' });
+        var playerId = 'P' + (room.players.length + 1);
+        room.players.push({ id: playerId, name: trimName, socketId: socket.id });
+        room.scores[playerId] = 0;
         socket.join(code);
-        socket.data = { roomCode: code, playerId: 'P2' };
-
-        callback({ success: true, roomCode: code, playerId: 'P2' });
-        console.log(`[ROOM] ${playerName} joined room ${code}`);
-
-        // Both players are in — start the game
-        startGame(code);
+        socket.data = { roomCode: code, playerId: playerId };
+        callback({ success: true, roomCode: code, playerId: playerId });
+        broadcastPlayerList(code);
     });
-
-    /* ── SUBMIT CHOICE ── */
-    socket.on('submit-choice', ({ choice }, callback) => {
-        const { roomCode, playerId } = socket.data || {};
-        if (!roomCode || !playerId) return callback({ success: false, error: 'Not in a room.' });
-
-        const room = rooms[roomCode];
-        if (!room || room.state !== 'playing') return callback({ success: false, error: 'Game not active.' });
-
-        const roundIdx = room.currentRound - 1;
-        const round = room.rounds[roundIdx];
-
-        if (round.choices[playerId]) return callback({ success: false, error: 'Already submitted.' });
-        if (!['collaborate', 'defect'].includes(choice)) return callback({ success: false, error: 'Invalid choice.' });
-
-        round.choices[playerId] = choice;
+    socket.on('start-game', function(callback) {
+        var sd = socket.data || {};
+        var room = rooms[sd.roomCode];
+        if (!room) return callback({ success: false, error: 'Room not found.' });
+        if (room.hostSocketId !== socket.id) return callback({ success: false, error: 'Only the host can start.' });
+        if (room.players.length < 2) return callback({ success: false, error: 'Need at least 2 players.' });
+        if (room.players.length % 2 !== 0) return callback({ success: false, error: 'Need even number of players (currently ' + room.players.length + ').' });
+        if (room.state !== 'waiting') return callback({ success: false, error: 'Game already started.' });
         callback({ success: true });
-
-        // Notify opponent that this player has locked in (without revealing choice)
-        const opponent = room.players.find(p => p.id !== playerId);
-        if (opponent) {
-            io.to(opponent.socketId).emit('opponent-locked');
-        }
-
-        console.log(`[CHOICE] Room ${roomCode} Round ${room.currentRound}: ${playerId} chose ${choice}`);
-
-        // If both submitted, resolve round
-        if (round.choices['P1'] && round.choices['P2']) {
-            resolveRound(roomCode);
-        }
+        startGame(sd.roomCode);
     });
-
-    /* ── DISCONNECT ── */
-    socket.on('disconnect', () => {
-        const { roomCode, playerId } = socket.data || {};
-        if (roomCode && rooms[roomCode]) {
-            const room = rooms[roomCode];
-            // Notify the other player
-            io.to(roomCode).emit('player-disconnected', {
-                name: room.players.find(p => p.id === playerId)?.name || 'Opponent',
-            });
-            // Clean up
-            if (room.state !== 'finished') {
-                delete rooms[roomCode];
-                console.log(`[ROOM] Room ${roomCode} deleted (player disconnected)`);
+    socket.on('submit-choice', function(data, callback) {
+        var sd = socket.data || {};
+        if (!sd.roomCode || !sd.playerId) return callback({ success: false, error: 'Not in a room.' });
+        var room = rooms[sd.roomCode];
+        if (!room || room.state !== 'playing') return callback({ success: false, error: 'Game not active.' });
+        var round = room.rounds[room.currentRound - 1];
+        if (round.choices[sd.playerId]) return callback({ success: false, error: 'Already submitted.' });
+        if (data.choice !== 'collaborate' && data.choice !== 'defect') return callback({ success: false, error: 'Invalid choice.' });
+        round.choices[sd.playerId] = data.choice;
+        callback({ success: true });
+        var pair = room.pairs.find(function(p) { return p.playerA === sd.playerId || p.playerB === sd.playerId; });
+        if (pair) {
+            var oppId = pair.playerA === sd.playerId ? pair.playerB : pair.playerA;
+            var opp = room.players.find(function(p) { return p.id === oppId; });
+            if (opp) io.to(opp.socketId).emit('opponent-locked');
+        }
+        checkRoundComplete(sd.roomCode);
+    });
+    socket.on('disconnect', function() {
+        var sd = socket.data || {};
+        if (sd.roomCode && rooms[sd.roomCode]) {
+            var room = rooms[sd.roomCode];
+            var player = room.players.find(function(p) { return p.id === sd.playerId; });
+            var playerName = player ? player.name : 'A player';
+            if (room.state === 'waiting') {
+                room.players = room.players.filter(function(p) { return p.id !== sd.playerId; });
+                delete room.scores[sd.playerId];
+                if (room.hostSocketId === socket.id) {
+                    if (room.players.length > 0) { room.hostSocketId = room.players[0].socketId; }
+                    else { delete rooms[sd.roomCode]; return; }
+                }
+                broadcastPlayerList(sd.roomCode);
+            } else if (room.state === 'playing') {
+                io.to(sd.roomCode).emit('player-disconnected', { name: playerName });
+                delete rooms[sd.roomCode];
             }
         }
-        console.log(`[-] Disconnected: ${socket.id}`);
     });
 });
-
-/* ═══════════════════════════════════════════════
-   GAME LOGIC
-   ═══════════════════════════════════════════════ */
 function startGame(roomCode) {
-    const room = rooms[roomCode];
+    var room = rooms[roomCode];
+    var ids = shuffle(room.players.map(function(p) { return p.id; }));
+    room.pairs = [];
+    for (var i = 0; i < ids.length; i += 2) { room.pairs.push({ playerA: ids[i], playerB: ids[i + 1] }); }
     room.state = 'playing';
     room.currentRound = 0;
-
-    // Tell both players the game has started (names, NOT round count)
-    io.to(roomCode).emit('game-started', {
-        players: room.players.map(p => ({ id: p.id, name: p.name })),
+    room.pairs.forEach(function(pair, idx) {
+        var pA = room.players.find(function(p) { return p.id === pair.playerA; });
+        var pB = room.players.find(function(p) { return p.id === pair.playerB; });
+        function mp(you, opp) { return { pairNumber: idx + 1, totalPairs: room.pairs.length, totalPlayers: room.players.length, you: { id: you.id, name: you.name }, opponent: { id: opp.id, name: opp.name } }; }
+        if (pA) io.to(pA.socketId).emit('game-started', mp(pA, pB));
+        if (pB) io.to(pB.socketId).emit('game-started', mp(pB, pA));
     });
-
     nextRound(roomCode);
 }
-
 function nextRound(roomCode) {
-    const room = rooms[roomCode];
+    var room = rooms[roomCode];
     room.currentRound++;
-    room.rounds.push({ choices: {}, results: {} });
-
-    io.to(roomCode).emit('new-round', {
-        roundNumber: room.currentRound,
-    });
-
-    console.log(`[ROUND] Room ${roomCode} — Round ${room.currentRound} started`);
+    room.rounds.push({ choices: {} });
+    io.to(roomCode).emit('new-round', { roundNumber: room.currentRound, totalRounds: room.totalRounds });
 }
-
+function checkRoundComplete(roomCode) {
+    var room = rooms[roomCode];
+    var round = room.rounds[room.currentRound - 1];
+    var done = room.pairs.every(function(pair) { return round.choices[pair.playerA] && round.choices[pair.playerB]; });
+    if (done) resolveRound(roomCode);
+}
 function resolveRound(roomCode) {
-    const room = rooms[roomCode];
-    const roundIdx = room.currentRound - 1;
-    const round = room.rounds[roundIdx];
-
-    const choiceP1 = round.choices['P1'];
-    const choiceP2 = round.choices['P2'];
-    const [ptsP1, ptsP2] = PAYOFF[choiceP1][choiceP2];
-
-    round.results = { P1: ptsP1, P2: ptsP2 };
-    room.scores['P1'] += ptsP1;
-    room.scores['P2'] += ptsP2;
-
-    // Send round result to both players (show choices + round points, but NOT cumulative score)
-    io.to(roomCode).emit('round-result', {
-        roundNumber: room.currentRound,
-        choices: { P1: choiceP1, P2: choiceP2 },
-        points: { P1: ptsP1, P2: ptsP2 },
+    var room = rooms[roomCode];
+    var round = room.rounds[room.currentRound - 1];
+    room.pairs.forEach(function(pair) {
+        var cA = round.choices[pair.playerA]; var cB = round.choices[pair.playerB];
+        var pts = PAYOFF[cA][cB];
+        room.scores[pair.playerA] += pts[0]; room.scores[pair.playerB] += pts[1];
+        var pA = room.players.find(function(p) { return p.id === pair.playerA; });
+        var pB = room.players.find(function(p) { return p.id === pair.playerB; });
+        if (pA) io.to(pA.socketId).emit('round-result', { roundNumber: room.currentRound, yourChoice: cA, oppChoice: cB, yourPts: pts[0], oppPts: pts[1], oppName: pB ? pB.name : '?' });
+        if (pB) io.to(pB.socketId).emit('round-result', { roundNumber: room.currentRound, yourChoice: cB, oppChoice: cA, yourPts: pts[1], oppPts: pts[0], oppName: pA ? pA.name : '?' });
     });
-
-    console.log(`[RESULT] Room ${roomCode} Round ${room.currentRound}: P1=${choiceP1}(+${ptsP1}) P2=${choiceP2}(+${ptsP2})`);
-
-    // Check if game is over
-    if (room.currentRound >= room.totalRounds) {
-        setTimeout(() => endGame(roomCode), 2000);
-    } else {
-        setTimeout(() => nextRound(roomCode), 2500);
-    }
+    if (room.currentRound >= room.totalRounds) { setTimeout(function() { endGame(roomCode); }, 2500); }
+    else { setTimeout(function() { nextRound(roomCode); }, 2500); }
 }
-
 function endGame(roomCode) {
-    const room = rooms[roomCode];
+    var room = rooms[roomCode];
     room.state = 'finished';
-
-    const results = room.players.map(p => ({
-        id: p.id,
-        name: p.name,
-        score: room.scores[p.id],
-    })).sort((a, b) => b.score - a.score);
-
-    // Build round history for final display
-    const history = room.rounds.map((r, i) => ({
-        round: i + 1,
-        choices: r.choices,
-        points: r.results,
-    }));
-
-    io.to(roomCode).emit('game-over', {
-        results,
-        totalRounds: room.totalRounds,
-        history,
+    var leaderboard = room.players.map(function(p) {
+        var pair = room.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
+        var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
+        var opp = room.players.find(function(pl) { return pl.id === oppId; });
+        return { id: p.id, name: p.name, score: room.scores[p.id], pairNumber: room.pairs.indexOf(pair) + 1, opponentName: opp ? opp.name : '?' };
+    }).sort(function(a, b) { return b.score - a.score; });
+    room.players.forEach(function(p) {
+        var pair = room.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
+        var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
+        var opp = room.players.find(function(pl) { return pl.id === oppId; });
+        var history = room.rounds.map(function(r, i) {
+            var myC = r.choices[p.id]; var opC = r.choices[oppId];
+            var myPts = PAYOFF[myC][opC];
+            return { round: i + 1, myChoice: myC, opChoice: opC, myPts: myPts[0], opPts: myPts[1] };
+        });
+        io.to(p.socketId).emit('game-over', { leaderboard: leaderboard, totalRounds: room.totalRounds, myId: p.id, history: history, opponentName: opp ? opp.name : '?' });
     });
-
-    console.log(`[END] Room ${roomCode} — Final: ${results.map(r => `${r.name}:${r.score}`).join(' vs ')}`);
-
-    // Clean up room after a delay
-    setTimeout(() => {
-        delete rooms[roomCode];
-        console.log(`[ROOM] Room ${roomCode} cleaned up`);
-    }, 60000);
+    setTimeout(function() { delete rooms[roomCode]; }, 120000);
 }
-
-/* ═══════════════════════════════════════════════
-   START SERVER
-   ═══════════════════════════════════════════════ */
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`\n🎲 Prisoner's Dilemma server running on http://localhost:${PORT}\n`);
-});
+var PORT = process.env.PORT || 3000;
+server.listen(PORT, function() { console.log('Server on http://localhost:' + PORT); });

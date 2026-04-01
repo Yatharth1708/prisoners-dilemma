@@ -1,777 +1,171 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prisoner's Dilemma — Multiplayer</title>
-    <style>
-        /* ─────────────── RESET ─────────────── */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        :root {
-            --bg: #0b0b1a;
-            --surface: #141428;
-            --surface2: #1e1e38;
-            --accent: #00d2ff;
-            --accent2: #7b2ff7;
-            --green: #00e676;
-            --red: #ff1744;
-            --gold: #ffd740;
-            --text: #e8e8f0;
-            --dim: #777;
-            --radius: 14px;
-        }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        /* ─────────────── HEADER ─────────────── */
-        .header {
-            text-align: center;
-            padding: 36px 20px 10px;
-        }
-        .header h1 {
-            font-size: 2.2rem;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .header p { color: var(--dim); margin-top: 4px; font-size: 0.95rem; }
-
-        /* ─────────────── SCREENS (one visible at a time) ─────────────── */
-        .screen {
-            display: none;
-            width: 100%;
-            max-width: 560px;
-            padding: 24px 20px;
-            animation: fadeUp 0.35s ease;
-        }
-        .screen.active { display: block; }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(18px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        /* ─────────────── CARD ─────────────── */
-        .card {
-            background: var(--surface);
-            border: 1px solid #2a2a48;
-            border-radius: var(--radius);
-            padding: 28px 24px;
-            margin-bottom: 18px;
-        }
-        .card h2 {
-            font-size: 1.3rem;
-            margin-bottom: 16px;
-            color: var(--accent);
-        }
-
-        /* ─────────────── INPUTS ─────────────── */
-        .input-group {
-            margin-bottom: 16px;
-        }
-        .input-group label {
-            display: block;
-            font-size: 0.85rem;
-            color: var(--dim);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .input-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #333;
-            border-radius: 10px;
-            background: var(--surface2);
-            color: var(--text);
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .input-group input:focus { border-color: var(--accent); }
-        .input-group input::placeholder { color: #555; }
-
-        /* ─────────────── BUTTONS ─────────────── */
-        .btn {
-            border: none;
-            padding: 13px 32px;
-            border-radius: 50px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            letter-spacing: 0.4px;
-            width: 100%;
-            margin-top: 6px;
-        }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
-        .btn:active { transform: translateY(0); }
-        .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            color: #fff;
-        }
-        .btn-secondary {
-            background: var(--surface2);
-            color: var(--text);
-            border: 1px solid #444;
-            margin-top: 10px;
-        }
-
-        .btn-row {
-            display: flex;
-            gap: 12px;
-            margin-top: 10px;
-        }
-        .btn-row .btn { flex: 1; }
-
-        /* ─────────────── ROOM CODE DISPLAY ─────────────── */
-        .room-code-display {
-            text-align: center;
-            margin: 20px 0;
-        }
-        .room-code-display .code {
-            display: inline-block;
-            font-size: 2.6rem;
-            font-weight: 800;
-            letter-spacing: 8px;
-            color: var(--gold);
-            background: var(--surface2);
-            padding: 14px 32px;
-            border-radius: 12px;
-            border: 2px dashed var(--gold);
-            user-select: all;
-        }
-        .room-code-display p { color: var(--dim); margin-top: 10px; font-size: 0.9rem; }
-
-        /* ─────────────── WAITING SPINNER ─────────────── */
-        .waiting {
-            text-align: center;
-            padding: 30px 0;
-        }
-        .spinner {
-            width: 48px; height: 48px;
-            border: 4px solid #333;
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 16px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .waiting p { color: var(--dim); font-size: 1rem; }
-
-        /* ─────────────── GAME SCREEN ─────────────── */
-        .round-badge {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .round-badge .round-num {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--accent);
-        }
-        .round-badge .sub {
-            font-size: 0.85rem;
-            color: var(--dim);
-            margin-top: 2px;
-        }
-
-        .vs-bar {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 24px;
-            font-size: 1rem;
-        }
-        .vs-bar .you { color: var(--green); font-weight: 700; }
-        .vs-bar .opp { color: var(--red); font-weight: 700; }
-        .vs-bar .vs  { color: var(--dim); font-size: 0.85rem; }
-
-        /* ─── CHOICE BUTTONS ─── */
-        .choice-area {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-        .choice-card {
-            flex: 1;
-            background: var(--surface2);
-            border: 3px solid transparent;
-            border-radius: 14px;
-            padding: 24px 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.25s;
-        }
-        .choice-card:hover { border-color: #555; transform: translateY(-3px); }
-        .choice-card.selected-collab { border-color: var(--green); background: rgba(0,230,118,0.1); }
-        .choice-card.selected-defect { border-color: var(--red); background: rgba(255,23,68,0.1); }
-        .choice-card.disabled { pointer-events: none; opacity: 0.4; }
-
-        .choice-card .icon { font-size: 2.4rem; margin-bottom: 8px; }
-        .choice-card .label { font-size: 1.1rem; font-weight: 700; }
-        .choice-card .desc { font-size: 0.78rem; color: var(--dim); margin-top: 4px; }
-
-        /* ─── STATUS LINE ─── */
-        .status-line {
-            text-align: center;
-            min-height: 36px;
-            padding: 8px;
-            font-size: 0.95rem;
-            color: var(--gold);
-        }
-        .status-line.subtle { color: var(--dim); }
-
-        /* ─── ROUND RESULT POPUP ─── */
-        .round-result-card {
-            background: var(--surface2);
-            border-radius: var(--radius);
-            padding: 20px;
-            text-align: center;
-            margin: 16px 0;
-            animation: fadeUp 0.3s ease;
-        }
-        .round-result-card h3 { color: var(--accent); margin-bottom: 12px; font-size: 1.1rem; }
-        .result-row {
-            display: flex;
-            justify-content: space-around;
-            gap: 12px;
-        }
-        .result-player {
-            flex: 1;
-            padding: 12px;
-            border-radius: 10px;
-            background: rgba(255,255,255,0.03);
-        }
-        .result-player .pname { font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
-        .result-player .pchoice { font-size: 0.85rem; margin-bottom: 2px; }
-        .result-player .ppts { font-size: 1.2rem; font-weight: 700; }
-
-        .collab-text { color: var(--green); }
-        .defect-text { color: var(--red); }
-
-        /* ─────────────── FINAL RESULTS SCREEN ─────────────── */
-        .trophy { text-align: center; font-size: 4rem; margin-bottom: 10px; }
-
-        .final-card {
-            background: var(--surface);
-            border-radius: var(--radius);
-            padding: 24px;
-            border: 1px solid #2a2a48;
-        }
-        .ranking-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 14px;
-        }
-        .ranking-table th, .ranking-table td {
-            padding: 12px;
-            text-align: center;
-            border-bottom: 1px solid #2a2a48;
-        }
-        .ranking-table th {
-            color: var(--accent);
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .ranking-table tr.winner td {
-            background: rgba(255,215,64,0.08);
-            font-weight: 700;
-        }
-        .ranking-table .rank-medal { font-size: 1.4rem; }
-        .ranking-table .score-val { color: var(--gold); font-size: 1.2rem; font-weight: 700; }
-
-        /* History in final */
-        .history-section { margin-top: 24px; }
-        .history-section h3 { color: var(--accent); font-size: 1rem; margin-bottom: 10px; text-align: center; }
-        .history-round {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 14px;
-            border-radius: 8px;
-            margin-bottom: 6px;
-            background: var(--surface2);
-            font-size: 0.85rem;
-        }
-        .history-round .hr-num { color: var(--dim); width: 70px; }
-        .history-round .hr-choices { flex: 1; text-align: center; }
-        .history-round .hr-pts { width: 100px; text-align: right; color: var(--dim); }
-
-        /* ─────────────── ERROR ─────────────── */
-        .error-msg {
-            color: var(--red);
-            font-size: 0.88rem;
-            text-align: center;
-            min-height: 22px;
-            margin-top: 8px;
-        }
-
-        /* ─────────────── PAYOFF REFERENCE ─────────────── */
-        .payoff-ref {
-            margin-top: 16px;
-            font-size: 0.78rem;
-            color: var(--dim);
-            text-align: center;
-            line-height: 1.6;
-        }
-        .payoff-ref table {
-            margin: 8px auto;
-            border-collapse: collapse;
-            font-size: 0.78rem;
-        }
-        .payoff-ref th, .payoff-ref td {
-            border: 1px solid #333;
-            padding: 6px 10px;
-            text-align: center;
-        }
-        .payoff-ref th { background: var(--surface2); color: var(--accent); }
-
-        /* ─────────────── RESPONSIVE ─────────────── */
-        @media (max-width: 500px) {
-            .header h1 { font-size: 1.6rem; }
-            .room-code-display .code { font-size: 1.8rem; letter-spacing: 5px; padding: 10px 20px; }
-            .choice-card .icon { font-size: 1.8rem; }
-            .choice-card .label { font-size: 0.95rem; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prisoner's Dilemma</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0b1a;--sf:#141428;--sf2:#1e1e38;--ac:#00d2ff;--ac2:#7b2ff7;--gn:#00e676;--rd:#ff1744;--gd:#ffd740;--tx:#e8e8f0;--dm:#777;--r:14px}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+.hdr{text-align:center;padding:30px 20px 10px}
+.hdr h1{font-size:2.2rem;background:linear-gradient(135deg,var(--ac),var(--ac2));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr p{color:var(--dm);margin-top:4px;font-size:.95rem}
+.scr{display:none;width:100%;max-width:620px;padding:20px;animation:fu .35s ease}
+.scr.active{display:block}
+.scr-w{max-width:900px}
+@keyframes fu{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.cd{background:var(--sf);border:1px solid #2a2a48;border-radius:var(--r);padding:24px;margin-bottom:16px}
+.cd h2{font-size:1.2rem;margin-bottom:14px;color:var(--ac)}
+.ig{margin-bottom:14px}
+.ig label{display:block;font-size:.82rem;color:var(--dm);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px}
+.ig input{width:100%;padding:11px 14px;border:2px solid #333;border-radius:10px;background:var(--sf2);color:var(--tx);font-size:1rem;outline:none;transition:border-color .2s}
+.ig input:focus{border-color:var(--ac)}
+.ig input::placeholder{color:#555}
+.btn{border:none;padding:12px 28px;border-radius:50px;font-size:.95rem;font-weight:600;cursor:pointer;transition:all .2s;width:100%;margin-top:6px}
+.btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-p{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}
+.btn-s{background:var(--sf2);color:var(--tx);border:1px solid #444;margin-top:10px}
+.btn-g{background:linear-gradient(135deg,var(--gn),#00b0ff);color:#000}
+.rcd{text-align:center;margin:16px 0}
+.rcd .code{display:inline-block;font-size:2.4rem;font-weight:800;letter-spacing:8px;color:var(--gd);background:var(--sf2);padding:12px 28px;border-radius:12px;border:2px dashed var(--gd);user-select:all}
+.rcd p{color:var(--dm);margin-top:8px;font-size:.88rem}
+.pl{list-style:none;margin:12px 0}
+.pl li{padding:10px 14px;background:var(--sf2);border-radius:8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-size:.92rem}
+.pl li .pn{color:var(--dm);font-size:.8rem}
+.pl li .ht{background:var(--gd);color:#000;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase}
+.pc{text-align:center;color:var(--dm);font-size:.9rem;margin-bottom:10px}
+.pc strong{color:var(--ac)}
+.wt{text-align:center;padding:20px 0}
+.sp{width:40px;height:40px;border:4px solid #333;border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rb{text-align:center;margin-bottom:18px}
+.rb .rn{font-size:1.6rem;font-weight:700;color:var(--ac)}
+.rb .su{font-size:.82rem;color:var(--dm);margin-top:2px}
+.pi{text-align:center;font-size:.82rem;color:var(--dm);margin-bottom:6px}
+.vb{display:flex;justify-content:center;align-items:center;gap:14px;margin-bottom:20px;font-size:1rem}
+.vb .y{color:var(--gn);font-weight:700}
+.vb .o{color:var(--rd);font-weight:700}
+.vb .v{color:var(--dm);font-size:.85rem}
+.ca{display:flex;gap:14px;margin-bottom:16px}
+.cc{flex:1;background:var(--sf2);border:3px solid transparent;border-radius:14px;padding:22px 14px;text-align:center;cursor:pointer;transition:all .25s}
+.cc:hover{border-color:#555;transform:translateY(-3px)}
+.cc.sc{border-color:var(--gn);background:rgba(0,230,118,.1)}
+.cc.sd{border-color:var(--rd);background:rgba(255,23,68,.1)}
+.cc.dis{pointer-events:none;opacity:.4}
+.cc .ic{font-size:2.2rem;margin-bottom:6px}
+.cc .lb{font-size:1.05rem;font-weight:700}
+.cc .ds{font-size:.75rem;color:var(--dm);margin-top:3px}
+.sl{text-align:center;min-height:32px;padding:6px;font-size:.92rem;color:var(--gd)}
+.sl.sub{color:var(--dm)}
+.rrc{background:var(--sf2);border-radius:var(--r);padding:18px;text-align:center;margin:14px 0;animation:fu .3s ease}
+.rrc h3{color:var(--ac);margin-bottom:10px;font-size:1rem}
+.rr{display:flex;justify-content:space-around;gap:10px}
+.rp{flex:1;padding:10px;border-radius:10px;background:rgba(255,255,255,.03)}
+.rp .rpn{font-weight:600;font-size:.85rem;margin-bottom:3px}
+.rp .rpc{font-size:.82rem;margin-bottom:2px}
+.rp .rpp{font-size:1.1rem;font-weight:700}
+.ct{color:var(--gn)}
+.dt{color:var(--rd)}
+.tp{text-align:center;font-size:3.5rem;margin-bottom:8px}
+.fc{background:var(--sf);border-radius:var(--r);padding:22px;border:1px solid #2a2a48}
+.rt{width:100%;border-collapse:collapse;margin-top:12px;font-size:.88rem}
+.rt th,.rt td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a2a48}
+.rt th{color:var(--ac);font-size:.75rem;text-transform:uppercase;letter-spacing:1px}
+.rt .wi td{background:rgba(255,215,64,.08);font-weight:700}
+.rt .im td{background:rgba(0,210,255,.08)}
+.rt .rm{font-size:1.3rem}
+.rt .sv{color:var(--gd);font-size:1.1rem;font-weight:700}
+.hs{margin-top:20px}
+.hs h3{color:var(--ac);font-size:.95rem;margin-bottom:8px;text-align:center}
+.hr{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-radius:8px;margin-bottom:5px;background:var(--sf2);font-size:.82rem}
+.hr .hn{color:var(--dm);width:65px}
+.hr .hc{flex:1;text-align:center}
+.hr .hp{width:90px;text-align:right;color:var(--dm)}
+.em{color:var(--rd);font-size:.85rem;text-align:center;min-height:20px;margin-top:6px}
+.pr{margin-top:14px;font-size:.76rem;color:var(--dm);text-align:center;line-height:1.6}
+.pr table{margin:6px auto;border-collapse:collapse;font-size:.76rem}
+.pr th,.pr td{border:1px solid #333;padding:5px 9px;text-align:center}
+.pr th{background:var(--sf2);color:var(--ac)}
+@media(max-width:500px){.hdr h1{font-size:1.5rem}.rcd .code{font-size:1.7rem;letter-spacing:5px;padding:10px 18px}.cc .ic{font-size:1.7rem}}
+</style>
 </head>
 <body>
+<div class="hdr"><h1>&#127922; Prisoner's Dilemma</h1><p>Up to 20 Players &middot; 10 Pairs &middot; 20 Rounds</p></div>
 
-<div class="header">
-    <h1>🎲 Prisoner's Dilemma</h1>
-    <p>Real-time Multiplayer</p>
+<div class="scr active" id="screen-lobby">
+<div class="cd"><h2>&#127918; Enter the Game</h2>
+<div class="ig"><label>Your Name</label><input type="text" id="inputName" placeholder="Enter your name..." maxlength="20" autocomplete="off"></div>
+<button class="btn btn-p" id="btnCreate" onclick="createRoom()">Create New Room</button>
+<div style="text-align:center;margin:16px 0 10px;color:var(--dm);font-size:.85rem">&mdash; or join an existing room &mdash;</div>
+<div class="ig"><label>Room Code</label><input type="text" id="inputCode" placeholder="Enter 5-letter code..." maxlength="5" autocomplete="off" style="text-transform:uppercase;letter-spacing:3px;text-align:center"></div>
+<button class="btn btn-s" id="btnJoin" onclick="joinRoom()">Join Room</button>
+<div class="em" id="lobbyError"></div></div>
+<div class="pr"><strong>Payoff Matrix (Your pts, Their pts)</strong>
+<table><tr><th></th><th>They C</th><th>They D</th></tr><tr><th>You C</th><td>3 , 3</td><td>0 , 5</td></tr><tr><th>You D</th><td>5 , 0</td><td>1 , 1</td></tr></table></div></div>
+
+<div class="scr" id="screen-waiting">
+<div class="cd"><h2>&#128336; Waiting Room</h2>
+<div class="rcd"><p>Share this code with other players:</p><div class="code" id="displayRoomCode">-----</div></div>
+<div class="pc" id="playerCount">0 / 20 players</div>
+<ul class="pl" id="playerList"></ul>
+<div class="em" id="waitingError"></div>
+<button class="btn btn-g" id="btnStartGame" onclick="hostStartGame()" style="display:none">&#128640; Start Game</button>
+<div class="wt" id="waitingSpinner"><div class="sp"></div><p id="waitingText">Waiting for host to start...</p></div></div></div>
+
+<div class="scr" id="screen-game">
+<div class="cd">
+<div class="rb"><div class="rn" id="roundLabel">Round 1</div><div class="su" id="roundSub">Round 1 of 20</div></div>
+<div class="pi" id="pairInfo">Pair 1 of 10</div>
+<div class="vb"><span class="y" id="youName">You</span><span class="v">&#9876;&#65039; VS</span><span class="o" id="oppName">Opponent</span></div>
+<div class="ca">
+<div class="cc" id="cardCollab" onclick="selectChoice('collaborate')"><div class="ic">&#129309;</div><div class="lb">Collaborate</div><div class="ds">Mutual trust for shared gain</div></div>
+<div class="cc" id="cardDefect" onclick="selectChoice('defect')"><div class="ic">&#128481;&#65039;</div><div class="lb">Defect</div><div class="ds">Betray for personal gain</div></div>
 </div>
+<button class="btn btn-p" id="btnLock" onclick="lockChoice()" disabled>&#128274; Lock In Choice</button>
+<div class="sl" id="gameStatus"></div>
+<div id="roundResultArea"></div></div>
+<div class="pr"><table><tr><th></th><th>They C</th><th>They D</th></tr><tr><th>You C</th><td>3 , 3</td><td>0 , 5</td></tr><tr><th>You D</th><td>5 , 0</td><td>1 , 1</td></tr></table></div></div>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 1 — LOBBY (Create or Join)
-     ══════════════════════════════════════════════ -->
-<div class="screen active" id="screen-lobby">
-    <div class="card">
-        <h2>🎮 Enter the Game</h2>
+<div class="scr scr-w" id="screen-results">
+<div class="tp">&#127942;</div>
+<div class="fc">
+<h2 style="text-align:center;color:var(--gd);margin-bottom:4px" id="resultTitle">Game Over!</h2>
+<p style="text-align:center;color:var(--dm);font-size:.88rem" id="resultSubtitle"></p>
+<table class="rt"><thead><tr><th>Rank</th><th>Player</th><th>Opponent</th><th>Pair</th><th>Score</th></tr></thead><tbody id="rankingBody"></tbody></table>
+<div class="hs"><h3>&#128220; Your Round-by-Round History</h3><div id="historyList"></div></div></div>
+<button class="btn btn-p" style="margin-top:18px" onclick="backToLobby()">&#128260; Play Again</button></div>
 
-        <div class="input-group">
-            <label>Your Name</label>
-            <input type="text" id="inputName" placeholder="Enter your name..." maxlength="20" autocomplete="off">
-        </div>
+<div class="scr" id="screen-disconnected">
+<div class="cd" style="text-align:center">
+<h2 style="color:var(--rd)">&#128532; Player Disconnected</h2>
+<p style="color:var(--dm);margin:14px 0" id="disconnectMsg">A player left the game.</p>
+<button class="btn btn-p" onclick="backToLobby()">Back to Lobby</button></div></div>
 
-        <button class="btn btn-primary" id="btnCreate" onclick="createRoom()">Create New Room</button>
-
-        <div style="text-align:center; margin: 18px 0 12px; color:var(--dim); font-size:0.85rem;">— or join an existing room —</div>
-
-        <div class="input-group">
-            <label>Room Code</label>
-            <input type="text" id="inputCode" placeholder="Enter 5-letter room code..." maxlength="5" autocomplete="off" style="text-transform:uppercase; letter-spacing:3px; text-align:center;">
-        </div>
-
-        <button class="btn btn-secondary" id="btnJoin" onclick="joinRoom()">Join Room</button>
-
-        <div class="error-msg" id="lobbyError"></div>
-    </div>
-
-    <!-- Payoff reference -->
-    <div class="payoff-ref">
-        <strong>Payoff Matrix (Your pts, Their pts)</strong>
-        <table>
-            <tr><th></th><th>They C</th><th>They D</th></tr>
-            <tr><th>You C</th><td>3 , 3</td><td>0 , 5</td></tr>
-            <tr><th>You D</th><td>5 , 0</td><td>1 , 1</td></tr>
-        </table>
-    </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     SCREEN 2 — WAITING FOR OPPONENT
-     ══════════════════════════════════════════════ -->
-<div class="screen" id="screen-waiting">
-    <div class="card">
-        <h2>🕐 Waiting for Opponent</h2>
-        <div class="room-code-display">
-            <p>Share this room code with your opponent:</p>
-            <div class="code" id="displayRoomCode">-----</div>
-            <p>They'll enter this code to join your game.</p>
-        </div>
-        <div class="waiting">
-            <div class="spinner"></div>
-            <p>Waiting for player 2 to join...</p>
-        </div>
-    </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     SCREEN 3 — GAME (Rounds)
-     ══════════════════════════════════════════════ -->
-<div class="screen" id="screen-game">
-    <div class="card">
-        <div class="round-badge">
-            <div class="round-num" id="roundLabel">Round 1</div>
-            <div class="sub">Make your choice — opponent can't see it until both lock in</div>
-        </div>
-
-        <div class="vs-bar">
-            <span class="you" id="youName">You</span>
-            <span class="vs">⚔️ VS</span>
-            <span class="opp" id="oppName">Opponent</span>
-        </div>
-
-        <div class="choice-area" id="choiceArea">
-            <div class="choice-card" id="cardCollab" onclick="selectChoice('collaborate')">
-                <div class="icon">🤝</div>
-                <div class="label">Collaborate</div>
-                <div class="desc">Mutual trust for shared gain</div>
-            </div>
-            <div class="choice-card" id="cardDefect" onclick="selectChoice('defect')">
-                <div class="icon">🗡️</div>
-                <div class="label">Defect</div>
-                <div class="desc">Betray for personal gain</div>
-            </div>
-        </div>
-
-        <button class="btn btn-primary" id="btnLock" onclick="lockChoice()" disabled>🔒 Lock In Choice</button>
-
-        <div class="status-line" id="gameStatus"></div>
-
-        <!-- Round result appears here -->
-        <div id="roundResultArea"></div>
-    </div>
-
-    <!-- Payoff reference -->
-    <div class="payoff-ref">
-        <table>
-            <tr><th></th><th>They Collaborate</th><th>They Defect</th></tr>
-            <tr><th>You Collaborate</th><td>3 , 3</td><td>0 , 5</td></tr>
-            <tr><th>You Defect</th><td>5 , 0</td><td>1 , 1</td></tr>
-        </table>
-    </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     SCREEN 4 — FINAL RESULTS
-     ══════════════════════════════════════════════ -->
-<div class="screen" id="screen-results">
-    <div class="trophy">🏆</div>
-
-    <div class="final-card">
-        <h2 style="text-align:center; color:var(--gold); margin-bottom:4px;" id="resultTitle">Game Over!</h2>
-        <p style="text-align:center; color:var(--dim); font-size:0.9rem;" id="resultSubtitle"></p>
-
-        <table class="ranking-table">
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Player</th>
-                    <th>Score</th>
-                </tr>
-            </thead>
-            <tbody id="rankingBody"></tbody>
-        </table>
-
-        <div class="history-section">
-            <h3>📜 Round-by-Round History</h3>
-            <div id="historyList"></div>
-        </div>
-    </div>
-
-    <button class="btn btn-primary" style="margin-top:20px;" onclick="backToLobby()">🔄 Play Again</button>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     SCREEN 5 — DISCONNECTED
-     ══════════════════════════════════════════════ -->
-<div class="screen" id="screen-disconnected">
-    <div class="card" style="text-align:center;">
-        <h2 style="color:var(--red);">😔 Opponent Disconnected</h2>
-        <p style="color:var(--dim); margin:16px 0;">Your opponent left the game.</p>
-        <button class="btn btn-primary" onclick="backToLobby()">Back to Lobby</button>
-    </div>
-</div>
-
-
-<!-- ══════════════════════════════════════════════
-     SOCKET.IO + GAME LOGIC
-     ══════════════════════════════════════════════ -->
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket = io();
-
-/* ── State ── */
-let myId = null;       // 'P1' or 'P2'
-let myName = '';
-let oppName = '';
-let currentChoice = null;
-let locked = false;
-
-/* ══════════════════════════════════════
-   SCREEN MANAGEMENT
-   ══════════════════════════════════════ */
-function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(`screen-${id}`).classList.add('active');
-}
-
-/* ══════════════════════════════════════
-   LOBBY ACTIONS
-   ══════════════════════════════════════ */
-function createRoom() {
-    const name = document.getElementById('inputName').value.trim();
-    if (!name) return showLobbyError('Please enter your name.');
-
-    myName = name;
-    disableLobbyButtons();
-
-    socket.emit('create-room', { playerName: name }, (res) => {
-        if (res.success) {
-            myId = res.playerId;
-            document.getElementById('displayRoomCode').textContent = res.roomCode;
-            showScreen('waiting');
-        } else {
-            showLobbyError(res.error);
-            enableLobbyButtons();
-        }
-    });
-}
-
-function joinRoom() {
-    const name = document.getElementById('inputName').value.trim();
-    const code = document.getElementById('inputCode').value.trim().toUpperCase();
-    if (!name) return showLobbyError('Please enter your name.');
-    if (!code || code.length < 4) return showLobbyError('Please enter a valid room code.');
-
-    myName = name;
-    disableLobbyButtons();
-
-    socket.emit('join-room', { roomCode: code, playerName: name }, (res) => {
-        if (res.success) {
-            myId = res.playerId;
-            // Game will start via 'game-started' event
-        } else {
-            showLobbyError(res.error);
-            enableLobbyButtons();
-        }
-    });
-}
-
-function showLobbyError(msg) {
-    document.getElementById('lobbyError').textContent = msg;
-}
-function disableLobbyButtons() {
-    document.getElementById('btnCreate').disabled = true;
-    document.getElementById('btnJoin').disabled = true;
-}
-function enableLobbyButtons() {
-    document.getElementById('btnCreate').disabled = false;
-    document.getElementById('btnJoin').disabled = false;
-}
-
-/* ══════════════════════════════════════
-   SOCKET EVENTS
-   ══════════════════════════════════════ */
-
-/* Game started — both players connected */
-socket.on('game-started', ({ players }) => {
-    const me = players.find(p => p.id === myId);
-    const opp = players.find(p => p.id !== myId);
-    myName = me.name;
-    oppName = opp.name;
-    document.getElementById('youName').textContent = myName;
-    document.getElementById('oppName').textContent = oppName;
-    showScreen('game');
-});
-
-/* New round */
-socket.on('new-round', ({ roundNumber }) => {
-    currentChoice = null;
-    locked = false;
-
-    document.getElementById('roundLabel').textContent = `Round ${roundNumber}`;
-    document.getElementById('roundResultArea').innerHTML = '';
-    document.getElementById('gameStatus').textContent = '';
-    document.getElementById('gameStatus').className = 'status-line';
-
-    // Reset choice cards
-    document.getElementById('cardCollab').className = 'choice-card';
-    document.getElementById('cardDefect').className = 'choice-card';
-    document.getElementById('btnLock').disabled = true;
-    document.getElementById('btnLock').textContent = '🔒 Lock In Choice';
-});
-
-/* Opponent locked in */
-socket.on('opponent-locked', () => {
-    if (!locked) {
-        document.getElementById('gameStatus').textContent = `${oppName} has locked in. Your turn!`;
-    } else {
-        document.getElementById('gameStatus').textContent = 'Both locked in — revealing...';
-    }
-});
-
-/* Round result */
-socket.on('round-result', ({ roundNumber, choices, points }) => {
-    const myChoice = choices[myId];
-    const oppChoice = choices[myId === 'P1' ? 'P2' : 'P1'];
-    const myPts = points[myId];
-    const oppPts = points[myId === 'P1' ? 'P2' : 'P1'];
-
-    const oppId = myId === 'P1' ? 'P2' : 'P1';
-
-    const choiceLabel = (c) => c === 'collaborate' ? '🤝 Collaborate' : '🗡️ Defect';
-    const choiceClass = (c) => c === 'collaborate' ? 'collab-text' : 'defect-text';
-
-    document.getElementById('roundResultArea').innerHTML = `
-        <div class="round-result-card">
-            <h3>Round ${roundNumber} Result</h3>
-            <div class="result-row">
-                <div class="result-player">
-                    <div class="pname">${myName} (You)</div>
-                    <div class="pchoice ${choiceClass(myChoice)}">${choiceLabel(myChoice)}</div>
-                    <div class="ppts">+${myPts}</div>
-                </div>
-                <div class="result-player">
-                    <div class="pname">${oppName}</div>
-                    <div class="pchoice ${choiceClass(oppChoice)}">${choiceLabel(oppChoice)}</div>
-                    <div class="ppts">+${oppPts}</div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.getElementById('gameStatus').textContent = 'Next round starting soon...';
-    document.getElementById('gameStatus').className = 'status-line subtle';
-});
-
-/* Game over — show final results */
-socket.on('game-over', ({ results, totalRounds, history }) => {
-    document.getElementById('resultSubtitle').textContent = `${totalRounds} rounds played`;
-
-    const tbody = document.getElementById('rankingBody');
-    tbody.innerHTML = '';
-    results.forEach((r, i) => {
-        const isMe = r.id === myId;
-        const medal = i === 0 ? '🥇' : '🥈';
-        const rowClass = i === 0 ? 'winner' : '';
-        tbody.innerHTML += `
-            <tr class="${rowClass}">
-                <td class="rank-medal">${medal}</td>
-                <td>${r.name}${isMe ? ' (You)' : ''}</td>
-                <td class="score-val">${r.score}</td>
-            </tr>
-        `;
-    });
-
-    // Determine title
-    if (results[0].score === results[1].score) {
-        document.getElementById('resultTitle').textContent = "It's a Tie! 🤝";
-    } else if (results[0].id === myId) {
-        document.getElementById('resultTitle').textContent = 'You Win! 🎉';
-    } else {
-        document.getElementById('resultTitle').textContent = 'You Lost! 😅';
-    }
-
-    // Round history
-    const histDiv = document.getElementById('historyList');
-    histDiv.innerHTML = '';
-    const oppId = myId === 'P1' ? 'P2' : 'P1';
-
-    history.forEach(h => {
-        const myC = h.choices[myId];
-        const opC = h.choices[oppId];
-        const myP = h.points[myId];
-        const opP = h.points[oppId];
-        const cLabel = (c) => c === 'collaborate' ? 'C' : 'D';
-        const cClass = (c) => c === 'collaborate' ? 'collab-text' : 'defect-text';
-
-        histDiv.innerHTML += `
-            <div class="history-round">
-                <span class="hr-num">Round ${h.round}</span>
-                <span class="hr-choices">
-                    ${myName}: <span class="${cClass(myC)}">${cLabel(myC)}</span>
-                    &nbsp;|&nbsp;
-                    ${oppName}: <span class="${cClass(opC)}">${cLabel(opC)}</span>
-                </span>
-                <span class="hr-pts">+${myP} / +${opP}</span>
-            </div>
-        `;
-    });
-
-    showScreen('results');
-});
-
-/* Opponent disconnected */
-socket.on('player-disconnected', () => {
-    showScreen('disconnected');
-});
-
-/* ══════════════════════════════════════
-   CHOICE INTERACTION
-   ══════════════════════════════════════ */
-function selectChoice(choice) {
-    if (locked) return;
-    currentChoice = choice;
-
-    const collab = document.getElementById('cardCollab');
-    const defect = document.getElementById('cardDefect');
-    collab.className = 'choice-card';
-    defect.className = 'choice-card';
-
-    if (choice === 'collaborate') collab.classList.add('selected-collab');
-    else defect.classList.add('selected-defect');
-
-    document.getElementById('btnLock').disabled = false;
-}
-
-function lockChoice() {
-    if (!currentChoice || locked) return;
-    locked = true;
-
-    document.getElementById('btnLock').disabled = true;
-    document.getElementById('btnLock').textContent = '✅ Locked In';
-    document.getElementById('cardCollab').classList.add('disabled');
-    document.getElementById('cardDefect').classList.add('disabled');
-    document.getElementById('gameStatus').textContent = 'Waiting for opponent...';
-
-    socket.emit('submit-choice', { choice: currentChoice }, (res) => {
-        if (!res.success) {
-            document.getElementById('gameStatus').textContent = 'Error: ' + res.error;
-        }
-    });
-}
-
-/* ══════════════════════════════════════
-   PLAY AGAIN
-   ══════════════════════════════════════ */
-function backToLobby() {
-    myId = null;
-    myName = '';
-    oppName = '';
-    currentChoice = null;
-    locked = false;
-    document.getElementById('lobbyError').textContent = '';
-    document.getElementById('inputCode').value = '';
-    enableLobbyButtons();
-    showScreen('lobby');
-}
-
-/* ══════════════════════════════════════
-   ENTER KEY SUPPORT
-   ══════════════════════════════════════ */
-document.getElementById('inputName').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') createRoom();
-});
-document.getElementById('inputCode').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') joinRoom();
-});
+var socket=io(),myId=null,myName='',oppName='',currentChoice=null,locked=false,isHost=false;
+function showScreen(id){var s=document.querySelectorAll('.scr');for(var i=0;i<s.length;i++)s[i].classList.remove('active');document.getElementById('screen-'+id).classList.add('active')}
+function createRoom(){var n=document.getElementById('inputName').value.trim();if(!n)return sle('Please enter your name.');myName=n;isHost=true;dl();socket.emit('create-room',{playerName:n},function(r){if(r.success){myId=r.playerId;document.getElementById('displayRoomCode').textContent=r.roomCode;document.getElementById('btnStartGame').style.display='block';document.getElementById('waitingSpinner').style.display='none';showScreen('waiting')}else{sle(r.error);el()}})}
+function joinRoom(){var n=document.getElementById('inputName').value.trim(),c=document.getElementById('inputCode').value.trim().toUpperCase();if(!n)return sle('Please enter your name.');if(!c||c.length<4)return sle('Please enter a valid room code.');myName=n;isHost=false;dl();socket.emit('join-room',{roomCode:c,playerName:n},function(r){if(r.success){myId=r.playerId;document.getElementById('displayRoomCode').textContent=r.roomCode;document.getElementById('btnStartGame').style.display='none';document.getElementById('waitingSpinner').style.display='block';document.getElementById('waitingText').textContent='Waiting for host to start...';showScreen('waiting')}else{sle(r.error);el()}})}
+function sle(m){document.getElementById('lobbyError').textContent=m}
+function dl(){document.getElementById('btnCreate').disabled=true;document.getElementById('btnJoin').disabled=true}
+function el(){document.getElementById('btnCreate').disabled=false;document.getElementById('btnJoin').disabled=false}
+function hostStartGame(){document.getElementById('btnStartGame').disabled=true;document.getElementById('waitingError').textContent='';socket.emit('start-game',function(r){if(!r.success){document.getElementById('waitingError').textContent=r.error;document.getElementById('btnStartGame').disabled=false}})}
+socket.on('player-list',function(d){var l=document.getElementById('playerList');l.innerHTML='';d.players.forEach(function(p,i){var li=document.createElement('li');var me=p.id===myId;var host=p.id===d.hostId;li.innerHTML='<span><span class="pn">#'+(i+1)+'</span> '+p.name+(me?' (You)':'')+'</span>'+(host?'<span class="ht">Host</span>':'');if(me)li.style.borderLeft='3px solid var(--ac)';l.appendChild(li)});document.getElementById('playerCount').innerHTML='<strong>'+d.players.length+'</strong> / '+d.maxPlayers+' players';if(d.hostId===myId){document.getElementById('btnStartGame').style.display='block';document.getElementById('waitingSpinner').style.display='none';isHost=true}});
+socket.on('game-started',function(d){myId=d.you.id;myName=d.you.name;oppName=d.opponent.name;document.getElementById('youName').textContent=myName;document.getElementById('oppName').textContent=oppName;document.getElementById('pairInfo').textContent='Pair '+d.pairNumber+' of '+d.totalPairs+' ('+d.totalPlayers+' players)';showScreen('game')});
+socket.on('new-round',function(d){currentChoice=null;locked=false;document.getElementById('roundLabel').textContent='Round '+d.roundNumber;document.getElementById('roundSub').textContent='Round '+d.roundNumber+' of '+d.totalRounds;document.getElementById('roundResultArea').innerHTML='';document.getElementById('gameStatus').textContent='';document.getElementById('gameStatus').className='sl';document.getElementById('cardCollab').className='cc';document.getElementById('cardDefect').className='cc';document.getElementById('btnLock').disabled=true;document.getElementById('btnLock').textContent='\uD83D\uDD12 Lock In Choice'});
+socket.on('opponent-locked',function(){if(!locked)document.getElementById('gameStatus').textContent=oppName+' has locked in!';else document.getElementById('gameStatus').textContent='Both locked in...'});
+socket.on('round-result',function(d){var cl=function(c){return c==='collaborate'?'\uD83E\uDD1D Collaborate':'\uD83D\uDDE1\uFE0F Defect'};var cx=function(c){return c==='collaborate'?'ct':'dt'};document.getElementById('roundResultArea').innerHTML='<div class="rrc"><h3>Round '+d.roundNumber+' Result</h3><div class="rr"><div class="rp"><div class="rpn">'+myName+' (You)</div><div class="rpc '+cx(d.yourChoice)+'">'+cl(d.yourChoice)+'</div><div class="rpp">+'+d.yourPts+'</div></div><div class="rp"><div class="rpn">'+d.oppName+'</div><div class="rpc '+cx(d.oppChoice)+'">'+cl(d.oppChoice)+'</div><div class="rpp">+'+d.oppPts+'</div></div></div></div>';document.getElementById('gameStatus').textContent='Next round soon...';document.getElementById('gameStatus').className='sl sub'});
+socket.on('game-over',function(d){document.getElementById('resultSubtitle').textContent=d.totalRounds+' rounds \u00B7 '+d.leaderboard.length+' players';var tb=document.getElementById('rankingBody');tb.innerHTML='';d.leaderboard.forEach(function(r,i){var me=r.id===d.myId;var md=i===0?'\uD83E\uDD47':i===1?'\uD83E\uDD48':i===2?'\uD83E\uDD49':(i+1);var rc=i===0?'wi':'';if(me)rc+=' im';tb.innerHTML+='<tr class="'+rc+'"><td class="rm">'+md+'</td><td>'+r.name+(me?' (You)':'')+'</td><td>'+r.opponentName+'</td><td>Pair '+r.pairNumber+'</td><td class="sv">'+r.score+'</td></tr>'});var mr=d.leaderboard.findIndex(function(r){return r.id===d.myId});document.getElementById('resultTitle').textContent=mr===0?'You Won! \uD83C\uDF89':mr<=2?'Top 3! \uD83C\uDFC5':'Game Over! \uD83C\uDFC1';var hl=document.getElementById('historyList');hl.innerHTML='';d.history.forEach(function(h){var lbl=function(c){return c==='collaborate'?'C':'D'};var cls=function(c){return c==='collaborate'?'ct':'dt'};hl.innerHTML+='<div class="hr"><span class="hn">R'+h.round+'</span><span class="hc">You: <span class="'+cls(h.myChoice)+'">'+lbl(h.myChoice)+'</span> | '+d.opponentName+': <span class="'+cls(h.opChoice)+'">'+lbl(h.opChoice)+'</span></span><span class="hp">+'+h.myPts+' / +'+h.opPts+'</span></div>'});showScreen('results')});
+socket.on('player-disconnected',function(d){document.getElementById('disconnectMsg').textContent=d.name+' disconnected. Game aborted.';showScreen('disconnected')});
+function selectChoice(c){if(locked)return;currentChoice=c;document.getElementById('cardCollab').className='cc';document.getElementById('cardDefect').className='cc';if(c==='collaborate')document.getElementById('cardCollab').classList.add('sc');else document.getElementById('cardDefect').classList.add('sd');document.getElementById('btnLock').disabled=false}
+function lockChoice(){if(!currentChoice||locked)return;locked=true;document.getElementById('btnLock').disabled=true;document.getElementById('btnLock').textContent='\u2705 Locked In';document.getElementById('cardCollab').classList.add('dis');document.getElementById('cardDefect').classList.add('dis');document.getElementById('gameStatus').textContent='Waiting for all players...';socket.emit('submit-choice',{choice:currentChoice},function(r){if(!r.success)document.getElementById('gameStatus').textContent='Error: '+r.error})}
+function backToLobby(){myId=null;myName='';oppName='';currentChoice=null;locked=false;isHost=false;document.getElementById('lobbyError').textContent='';document.getElementById('inputCode').value='';el();showScreen('lobby')}
+document.getElementById('inputName').addEventListener('keydown',function(e){if(e.key==='Enter')createRoom()});
+document.getElementById('inputCode').addEventListener('keydown',function(e){if(e.key==='Enter')joinRoom()});
 </script>
-
 </body>
 </html>
