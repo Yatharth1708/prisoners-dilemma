@@ -138,7 +138,7 @@ function nextRound(roomCode) {
     var room = rooms[roomCode];
     room.currentRound++;
     room.rounds.push({ choices: {} });
-    io.to(roomCode).emit('new-round', { roundNumber: room.currentRound, totalRounds: room.totalRounds });
+    io.to(roomCode).emit('new-round', { roundNumber: room.currentRound });
 }
 function checkRoundComplete(roomCode) {
     var room = rooms[roomCode];

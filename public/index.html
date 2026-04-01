@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prisoner's Dilemma</title>
+<title>Only Dilemma</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0b0b1a;--sf:#141428;--sf2:#1e1e38;--ac:#00d2ff;--ac2:#7b2ff7;--gn:#00e676;--rd:#ff1744;--gd:#ffd740;--tx:#e8e8f0;--dm:#777;--r:14px}
@@ -43,7 +43,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 @keyframes spin{to{transform:rotate(360deg)}}
 .rb{text-align:center;margin-bottom:18px}
 .rb .rn{font-size:1.6rem;font-weight:700;color:var(--ac)}
-.rb .su{font-size:.82rem;color:var(--dm);margin-top:2px}
 .pi{text-align:center;font-size:.82rem;color:var(--dm);margin-bottom:6px}
 .vb{display:flex;justify-content:center;align-items:center;gap:14px;margin-bottom:20px;font-size:1rem}
 .vb .y{color:var(--gn);font-weight:700}
@@ -93,7 +92,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 </style>
 </head>
 <body>
-<div class="hdr"><h1>&#127922; Prisoner's Dilemma</h1><p>Up to 20 Players &middot; 10 Pairs &middot; 20 Rounds</p></div>
+<div class="hdr"><h1>&#127922; Only Dilemma</h1><p>Up to 20 Players &middot; 10 Pairs</p></div>
 
 <div class="scr active" id="screen-lobby">
 <div class="cd"><h2>&#127918; Enter the Game</h2>
@@ -117,7 +116,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 <div class="scr" id="screen-game">
 <div class="cd">
-<div class="rb"><div class="rn" id="roundLabel">Round 1</div><div class="su" id="roundSub">Round 1 of 20</div></div>
+<div class="rb"><div class="rn" id="roundLabel">Round 1</div></div>
 <div class="pi" id="pairInfo">Pair 1 of 10</div>
 <div class="vb"><span class="y" id="youName">You</span><span class="v">&#9876;&#65039; VS</span><span class="o" id="oppName">Opponent</span></div>
 <div class="ca">
@@ -156,10 +155,10 @@ function el(){document.getElementById('btnCreate').disabled=false;document.getEl
 function hostStartGame(){document.getElementById('btnStartGame').disabled=true;document.getElementById('waitingError').textContent='';socket.emit('start-game',function(r){if(!r.success){document.getElementById('waitingError').textContent=r.error;document.getElementById('btnStartGame').disabled=false}})}
 socket.on('player-list',function(d){var l=document.getElementById('playerList');l.innerHTML='';d.players.forEach(function(p,i){var li=document.createElement('li');var me=p.id===myId;var host=p.id===d.hostId;li.innerHTML='<span><span class="pn">#'+(i+1)+'</span> '+p.name+(me?' (You)':'')+'</span>'+(host?'<span class="ht">Host</span>':'');if(me)li.style.borderLeft='3px solid var(--ac)';l.appendChild(li)});document.getElementById('playerCount').innerHTML='<strong>'+d.players.length+'</strong> / '+d.maxPlayers+' players';if(d.hostId===myId){document.getElementById('btnStartGame').style.display='block';document.getElementById('waitingSpinner').style.display='none';isHost=true}});
 socket.on('game-started',function(d){myId=d.you.id;myName=d.you.name;oppName=d.opponent.name;document.getElementById('youName').textContent=myName;document.getElementById('oppName').textContent=oppName;document.getElementById('pairInfo').textContent='Pair '+d.pairNumber+' of '+d.totalPairs+' ('+d.totalPlayers+' players)';showScreen('game')});
-socket.on('new-round',function(d){currentChoice=null;locked=false;document.getElementById('roundLabel').textContent='Round '+d.roundNumber;document.getElementById('roundSub').textContent='Round '+d.roundNumber+' of '+d.totalRounds;document.getElementById('roundResultArea').innerHTML='';document.getElementById('gameStatus').textContent='';document.getElementById('gameStatus').className='sl';document.getElementById('cardCollab').className='cc';document.getElementById('cardDefect').className='cc';document.getElementById('btnLock').disabled=true;document.getElementById('btnLock').textContent='\uD83D\uDD12 Lock In Choice'});
+socket.on('new-round',function(d){currentChoice=null;locked=false;document.getElementById('roundLabel').textContent='Round '+d.roundNumber;document.getElementById('roundResultArea').innerHTML='';document.getElementById('gameStatus').textContent='';document.getElementById('gameStatus').className='sl';document.getElementById('cardCollab').className='cc';document.getElementById('cardDefect').className='cc';document.getElementById('btnLock').disabled=true;document.getElementById('btnLock').textContent='\uD83D\uDD12 Lock In Choice'});
 socket.on('opponent-locked',function(){if(!locked)document.getElementById('gameStatus').textContent=oppName+' has locked in!';else document.getElementById('gameStatus').textContent='Both locked in...'});
 socket.on('round-result',function(d){var cl=function(c){return c==='collaborate'?'\uD83E\uDD1D Collaborate':'\uD83D\uDDE1\uFE0F Defect'};var cx=function(c){return c==='collaborate'?'ct':'dt'};document.getElementById('roundResultArea').innerHTML='<div class="rrc"><h3>Round '+d.roundNumber+' Result</h3><div class="rr"><div class="rp"><div class="rpn">'+myName+' (You)</div><div class="rpc '+cx(d.yourChoice)+'">'+cl(d.yourChoice)+'</div><div class="rpp">+'+d.yourPts+'</div></div><div class="rp"><div class="rpn">'+d.oppName+'</div><div class="rpc '+cx(d.oppChoice)+'">'+cl(d.oppChoice)+'</div><div class="rpp">+'+d.oppPts+'</div></div></div></div>';document.getElementById('gameStatus').textContent='Next round soon...';document.getElementById('gameStatus').className='sl sub'});
-socket.on('game-over',function(d){document.getElementById('resultSubtitle').textContent=d.totalRounds+' rounds \u00B7 '+d.leaderboard.length+' players';var tb=document.getElementById('rankingBody');tb.innerHTML='';d.leaderboard.forEach(function(r,i){var me=r.id===d.myId;var md=i===0?'\uD83E\uDD47':i===1?'\uD83E\uDD48':i===2?'\uD83E\uDD49':(i+1);var rc=i===0?'wi':'';if(me)rc+=' im';tb.innerHTML+='<tr class="'+rc+'"><td class="rm">'+md+'</td><td>'+r.name+(me?' (You)':'')+'</td><td>'+r.opponentName+'</td><td>Pair '+r.pairNumber+'</td><td class="sv">'+r.score+'</td></tr>'});var mr=d.leaderboard.findIndex(function(r){return r.id===d.myId});document.getElementById('resultTitle').textContent=mr===0?'You Won! \uD83C\uDF89':mr<=2?'Top 3! \uD83C\uDFC5':'Game Over! \uD83C\uDFC1';var hl=document.getElementById('historyList');hl.innerHTML='';d.history.forEach(function(h){var lbl=function(c){return c==='collaborate'?'C':'D'};var cls=function(c){return c==='collaborate'?'ct':'dt'};hl.innerHTML+='<div class="hr"><span class="hn">R'+h.round+'</span><span class="hc">You: <span class="'+cls(h.myChoice)+'">'+lbl(h.myChoice)+'</span> | '+d.opponentName+': <span class="'+cls(h.opChoice)+'">'+lbl(h.opChoice)+'</span></span><span class="hp">+'+h.myPts+' / +'+h.opPts+'</span></div>'});showScreen('results')});
+socket.on('game-over',function(d){document.getElementById('resultSubtitle').textContent=d.leaderboard.length+' players';var tb=document.getElementById('rankingBody');tb.innerHTML='';d.leaderboard.forEach(function(r,i){var me=r.id===d.myId;var md=i===0?'\uD83E\uDD47':i===1?'\uD83E\uDD48':i===2?'\uD83E\uDD49':(i+1);var rc=i===0?'wi':'';if(me)rc+=' im';tb.innerHTML+='<tr class="'+rc+'"><td class="rm">'+md+'</td><td>'+r.name+(me?' (You)':'')+'</td><td>'+r.opponentName+'</td><td>Pair '+r.pairNumber+'</td><td class="sv">'+r.score+'</td></tr>'});var mr=d.leaderboard.findIndex(function(r){return r.id===d.myId});document.getElementById('resultTitle').textContent=mr===0?'You Won! \uD83C\uDF89':mr<=2?'Top 3! \uD83C\uDFC5':'Game Over! \uD83C\uDFC1';var hl=document.getElementById('historyList');hl.innerHTML='';d.history.forEach(function(h){var lbl=function(c){return c==='collaborate'?'C':'D'};var cls=function(c){return c==='collaborate'?'ct':'dt'};hl.innerHTML+='<div class="hr"><span class="hn">R'+h.round+'</span><span class="hc">You: <span class="'+cls(h.myChoice)+'">'+lbl(h.myChoice)+'</span> | '+d.opponentName+': <span class="'+cls(h.opChoice)+'">'+lbl(h.opChoice)+'</span></span><span class="hp">+'+h.myPts+' / +'+h.opPts+'</span></div>'});showScreen('results')});
 socket.on('player-disconnected',function(d){document.getElementById('disconnectMsg').textContent=d.name+' disconnected. Game aborted.';showScreen('disconnected')});
 function selectChoice(c){if(locked)return;currentChoice=c;document.getElementById('cardCollab').className='cc';document.getElementById('cardDefect').className='cc';if(c==='collaborate')document.getElementById('cardCollab').classList.add('sc');else document.getElementById('cardDefect').classList.add('sd');document.getElementById('btnLock').disabled=false}
 function lockChoice(){if(!currentChoice||locked)return;locked=true;document.getElementById('btnLock').disabled=true;document.getElementById('btnLock').textContent='\u2705 Locked In';document.getElementById('cardCollab').classList.add('dis');document.getElementById('cardDefect').classList.add('dis');document.getElementById('gameStatus').textContent='Waiting for all players...';socket.emit('submit-choice',{choice:currentChoice},function(r){if(!r.success)document.getElementById('gameStatus').textContent='Error: '+r.error})}
