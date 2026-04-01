@@ -40,7 +40,7 @@ const PAYOFF = {
 const rooms = {}; // { [roomCode]: RoomState }
 
 function createRoom(code) {
-    const totalRounds = Math.floor(Math.random() * 8) + 3; // 3-10
+    const totalRounds = 20;
     return {
         code,
         players: [],          // [{ id, name, socketId }]
