@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const nodemailer = require('nodemailer');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
@@ -80,6 +81,7 @@ io.on('connection', function(socket) {
         if (rounds < 1) rounds = 1;
         if (rounds > 100) rounds = 100;
         room.totalRounds = rounds;
+        room.hostEmail = (data && data.email) ? data.email.trim() : '';
         callback({ success: true });
         startGame(sd.roomCode);
     });
@@ -174,6 +176,17 @@ function endGame(roomCode) {
         var opp = room.players.find(function(pl) { return pl.id === oppId; });
         return { id: p.id, name: p.name, score: room.scores[p.id], pairNumber: room.pairs.indexOf(pair) + 1, opponentName: opp ? opp.name : '?' };
     }).sort(function(a, b) { return b.score - a.score; });
+    // Build allPairsHistory for CSV
+    var allPairsHistory = [];
+    room.rounds.forEach(function(r, ri) {
+        room.pairs.forEach(function(pair, pi) {
+            var pA = room.players.find(function(p) { return p.id === pair.playerA; });
+            var pB = room.players.find(function(p) { return p.id === pair.playerB; });
+            var cA = r.choices[pair.playerA]; var cB = r.choices[pair.playerB];
+            var pts = PAYOFF[cA][cB];
+            allPairsHistory.push({ round: ri + 1, pair: pi + 1, playerA: pA ? pA.name : '?', choiceA: cA, playerB: pB ? pB.name : '?', choiceB: cB, ptsA: pts[0], ptsB: pts[1] });
+        });
+    });
     room.players.forEach(function(p) {
         var pair = room.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
         var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
@@ -183,9 +196,49 @@ function endGame(roomCode) {
             var myPts = PAYOFF[myC][opC];
             return { round: i + 1, myChoice: myC, opChoice: opC, myPts: myPts[0], opPts: myPts[1] };
         });
-        io.to(p.socketId).emit('game-over', { leaderboard: leaderboard, totalRounds: room.totalRounds, myId: p.id, history: history, opponentName: opp ? opp.name : '?' });
+        io.to(p.socketId).emit('game-over', { leaderboard: leaderboard, totalRounds: room.totalRounds, myId: p.id, history: history, opponentName: opp ? opp.name : '?', allPairsHistory: allPairsHistory });
     });
+    // Email CSV to host if email provided
+    if (room.hostEmail) {
+        sendResultsEmail(room.hostEmail, leaderboard, allPairsHistory, room.totalRounds);
+    }
     setTimeout(function() { delete rooms[roomCode]; }, 120000);
+}
+function generateCSV(leaderboard, allPairsHistory, totalRounds) {
+    var rows = [];
+    rows.push(['Rank','Player','Opponent','Pair','Score']);
+    leaderboard.forEach(function(r, i) { rows.push([i + 1, r.name, r.opponentName, 'Pair ' + r.pairNumber, r.score]); });
+    rows.push([]);
+    rows.push(['--- All Pairs Round-by-Round ---']);
+    rows.push(['Round','Pair','Player A','Choice A','Player B','Choice B','Pts A','Pts B']);
+    allPairsHistory.forEach(function(r) {
+        rows.push([r.round, r.pair, r.playerA, r.choiceA === 'collaborate' ? 'CoOperate' : 'Defect', r.playerB, r.choiceB === 'collaborate' ? 'CoOperate' : 'Defect', r.ptsA, r.ptsB]);
+    });
+    return rows.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+}
+function sendResultsEmail(email, leaderboard, allPairsHistory, totalRounds) {
+    var smtpHost = process.env.SMTP_HOST;
+    var smtpPort = process.env.SMTP_PORT || 587;
+    var smtpUser = process.env.SMTP_USER;
+    var smtpPass = process.env.SMTP_PASS;
+    var smtpFrom = process.env.SMTP_FROM || smtpUser;
+    if (!smtpHost || !smtpUser || !smtpPass) {
+        console.log('SMTP not configured. Skipping email to ' + email);
+        return;
+    }
+    var transporter = nodemailer.createTransport({ host: smtpHost, port: parseInt(smtpPort), secure: parseInt(smtpPort) === 465, auth: { user: smtpUser, pass: smtpPass } });
+    var csv = generateCSV(leaderboard, allPairsHistory, totalRounds);
+    var winner = leaderboard[0] ? leaderboard[0].name : 'N/A';
+    transporter.sendMail({
+        from: smtpFrom,
+        to: email,
+        subject: 'Dilemma Game Results - Winner: ' + winner,
+        text: 'Game results attached.\n\nLeaderboard:\n' + leaderboard.map(function(r, i) { return (i + 1) + '. ' + r.name + ' - ' + r.score + ' pts (vs ' + r.opponentName + ')'; }).join('\n'),
+        attachments: [{ filename: 'dilemma-results.csv', content: csv, contentType: 'text/csv' }]
+    }, function(err) {
+        if (err) console.log('Email error:', err.message);
+        else console.log('Results emailed to ' + email);
+    });
 }
 var PORT = process.env.PORT || 3000;
 server.listen(PORT, function() { console.log('Server on http://localhost:' + PORT); });
