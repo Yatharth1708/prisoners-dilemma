@@ -68,7 +68,7 @@ io.on('connection', function(socket) {
         callback({ success: true, roomCode: code, playerId: playerId });
         broadcastPlayerList(code);
     });
-    socket.on('start-game', function(callback) {
+    socket.on('start-game', function(data, callback) {
         var sd = socket.data || {};
         var room = rooms[sd.roomCode];
         if (!room) return callback({ success: false, error: 'Room not found.' });
@@ -76,6 +76,10 @@ io.on('connection', function(socket) {
         if (room.players.length < 2) return callback({ success: false, error: 'Need at least 2 players.' });
         if (room.players.length % 2 !== 0) return callback({ success: false, error: 'Need even number of players (currently ' + room.players.length + ').' });
         if (room.state !== 'waiting') return callback({ success: false, error: 'Game already started.' });
+        var rounds = parseInt(data && data.rounds) || TOTAL_ROUNDS;
+        if (rounds < 1) rounds = 1;
+        if (rounds > 100) rounds = 100;
+        room.totalRounds = rounds;
         callback({ success: true });
         startGame(sd.roomCode);
     });
