@@ -205,14 +205,35 @@ function endGame(roomCode) {
     setTimeout(function() { delete rooms[roomCode]; }, 120000);
 }
 function generateCSV(leaderboard, allPairsHistory, totalRounds) {
-    var rows = [];
-    rows.push(['Rank','Player','Opponent','Pair','Score']);
-    leaderboard.forEach(function(r, i) { rows.push([i + 1, r.name, r.opponentName, 'Pair ' + r.pairNumber, r.score]); });
-    rows.push([]);
-    rows.push(['--- All Pairs Round-by-Round ---']);
-    rows.push(['Round','Pair','Player A','Choice A','Player B','Choice B','Pts A','Pts B']);
+    var pairs = {};
     allPairsHistory.forEach(function(r) {
-        rows.push([r.round, r.pair, r.playerA, r.choiceA === 'collaborate' ? 'CoOperate' : 'Defect', r.playerB, r.choiceB === 'collaborate' ? 'CoOperate' : 'Defect', r.ptsA, r.ptsB]);
+        if (!pairs[r.pair]) pairs[r.pair] = { playerA: r.playerA, playerB: r.playerB, rounds: [] };
+        pairs[r.pair].rounds.push(r);
+    });
+    var pairKeys = Object.keys(pairs).sort(function(a, b) { return a - b; });
+    var maxR = 0;
+    pairKeys.forEach(function(k) { if (pairs[k].rounds.length > maxR) maxR = pairs[k].rounds.length; });
+    var header = ['', ''];
+    for (var i = 1; i <= maxR; i++) header.push('R' + i);
+    header.push('Total C', 'Total D', 'Points');
+    var rows = [header];
+    pairKeys.forEach(function(k) {
+        var p = pairs[k];
+        p.rounds.sort(function(a, b) { return a.round - b.round; });
+        var aChoices = [], bChoices = [], aPts = 0, bPts = 0, aC = 0, aD = 0, bC = 0, bD = 0;
+        p.rounds.forEach(function(r) {
+            var ca = r.choiceA === 'collaborate' ? 'C' : 'D';
+            var cb = r.choiceB === 'collaborate' ? 'C' : 'D';
+            aChoices.push(ca); bChoices.push(cb);
+            aPts += r.ptsA; bPts += r.ptsB;
+            if (ca === 'C') aC++; else aD++;
+            if (cb === 'C') bC++; else bD++;
+        });
+        var rowA = ['Pair ' + k, p.playerA];
+        var rowB = ['', p.playerB];
+        for (var i = 0; i < maxR; i++) { rowA.push(i < aChoices.length ? aChoices[i] : ''); rowB.push(i < bChoices.length ? bChoices[i] : ''); }
+        rowA.push(aC, aD, aPts); rowB.push(bC, bD, bPts);
+        rows.push(rowA); rows.push(rowB); rows.push([]);
     });
     return rows.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
 }
