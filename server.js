@@ -20,8 +20,8 @@ function generateRoomCode() {
     for (var i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
     return rooms[code] ? generateRoomCode() : code;
 }
-function createRoom(code, hostSocketId) {
-    return { code: code, hostSocketId: hostSocketId, players: [], pairs: [], totalRounds: TOTAL_ROUNDS, currentRound: 0, rounds: [], scores: {}, state: 'waiting' };
+function createRoom(code, hostSocketId, maxPlayers) {
+    return { code: code, hostSocketId: hostSocketId, players: [], pairs: [], totalRounds: TOTAL_ROUNDS, maxPlayers: maxPlayers || MAX_PLAYERS, currentRound: 0, rounds: [], scores: {}, state: 'waiting' };
 }
 function shuffle(arr) {
     for (var i = arr.length - 1; i > 0; i--) {
@@ -36,13 +36,17 @@ function broadcastPlayerList(roomCode) {
     io.to(roomCode).emit('player-list', {
         players: room.players.map(function(p) { return { id: p.id, name: p.name }; }),
         hostId: room.players.length > 0 ? room.players[0].id : null,
-        maxPlayers: MAX_PLAYERS,
+        maxPlayers: room.maxPlayers,
     });
 }
 io.on('connection', function(socket) {
     socket.on('create-room', function(data, callback) {
         var code = generateRoomCode();
-        var room = createRoom(code, socket.id);
+        var maxPlayers = parseInt(data && data.maxPlayers) || MAX_PLAYERS;
+        if (maxPlayers < 2) maxPlayers = 2;
+        if (maxPlayers % 2 !== 0) maxPlayers = maxPlayers + 1; // ensure even
+        if (maxPlayers > 100) maxPlayers = 100;
+        var room = createRoom(code, socket.id, maxPlayers);
         var playerId = 'P1';
         room.players.push({ id: playerId, name: data.playerName.trim(), socketId: socket.id });
         room.scores[playerId] = 0;
@@ -56,7 +60,7 @@ io.on('connection', function(socket) {
         var code = data.roomCode.toUpperCase().trim();
         var room = rooms[code];
         if (!room) return callback({ success: false, error: 'Room not found.' });
-        if (room.players.length >= MAX_PLAYERS) return callback({ success: false, error: 'Room is full (max 20).' });
+        if (room.players.length >= room.maxPlayers) return callback({ success: false, error: 'Room is full (max ' + room.maxPlayers + ').' });
         if (room.state !== 'waiting') return callback({ success: false, error: 'Game already in progress.' });
         var trimName = data.playerName.trim();
         var dup = room.players.some(function(p) { return p.name.toLowerCase() === trimName.toLowerCase(); });
