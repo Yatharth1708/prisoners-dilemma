@@ -7,7 +7,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0b0b1a;--sf:#141428;--sf2:#1e1e38;--ac:#00d2ff;--ac2:#7b2ff7;--gn:#00e676;--rd:#ff1744;--gd:#ffd740;--tx:#e8e8f0;--dm:#777;--r:14px}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding-bottom:40px}
 .hdr{text-align:center;padding:30px 20px 10px}
 .hdr h1{font-size:2.2rem;background:linear-gradient(135deg,var(--ac),var(--ac2));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .hdr p{color:var(--dm);margin-top:4px;font-size:.95rem}
@@ -105,7 +105,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .sb::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
 @media(max-width:700px){.gl{flex-direction:column}.sb{width:100%;max-height:200px;position:static;order:-1}}
 @media(max-width:500px){.hdr h1{font-size:1.5rem}.rcd .code{font-size:1.7rem;letter-spacing:5px;padding:10px 18px}.cc .ic{font-size:1.7rem}}
-.tm{text-align:center;padding:30px 20px 16px;font-size:.75rem;color:var(--dm);letter-spacing:.5px;margin-top:auto}
+.tm{text-align:center;padding:10px 20px;font-size:.75rem;color:var(--dm);letter-spacing:.5px;position:fixed;bottom:0;left:0;width:100%;background:var(--bg);border-top:1px solid #2a2a48;z-index:999}
 </style>
 </head>
 <body>
