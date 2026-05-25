@@ -254,15 +254,15 @@ function generateCSV(leaderboard, allPairsHistory, totalRounds) {
     pairKeys.forEach(function(k) { if (pairs[k].rounds.length > maxR) maxR = pairs[k].rounds.length; });
     var header = ['', ''];
     for (var i = 1; i <= maxR; i++) header.push('R' + i);
-    header.push('Total C', 'Total D', 'Points');
+    header.push('Total C', 'Total E', 'Points');
     var rows = [header];
     pairKeys.forEach(function(k) {
         var p = pairs[k];
         p.rounds.sort(function(a, b) { return a.round - b.round; });
         var aChoices = [], bChoices = [], aPts = 0, bPts = 0, aC = 0, aD = 0, bC = 0, bD = 0;
         p.rounds.forEach(function(r) {
-            var ca = r.choiceA === 'collaborate' ? 'C' : 'D';
-            var cb = r.choiceB === 'collaborate' ? 'C' : 'D';
+            var ca = r.choiceA === 'collaborate' ? 'C' : 'E';
+            var cb = r.choiceB === 'collaborate' ? 'C' : 'E';
             aChoices.push(ca); bChoices.push(cb);
             aPts += r.ptsA; bPts += r.ptsB;
             if (ca === 'C') aC++; else aD++;
