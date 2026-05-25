@@ -122,8 +122,20 @@ io.on('connection', function(socket) {
                 }
                 broadcastPlayerList(sd.roomCode);
             } else if (room.state === 'playing') {
-                io.to(sd.roomCode).emit('player-disconnected', { name: playerName });
-                delete rooms[sd.roomCode];
+                // Mark player as bot instead of aborting game
+                if (player) {
+                    player.isBot = true;
+                    player.socketId = null;
+                }
+                // Notify opponent
+                var pair = room.pairs.find(function(pr) { return pr.playerA === sd.playerId || pr.playerB === sd.playerId; });
+                if (pair) {
+                    var oppId = pair.playerA === sd.playerId ? pair.playerB : pair.playerA;
+                    var opp = room.players.find(function(p) { return p.id === oppId; });
+                    if (opp && opp.socketId) io.to(opp.socketId).emit('opponent-disconnected-bot', { name: playerName });
+                }
+                // If current round is active, submit random choice for the bot
+                submitBotChoices(sd.roomCode);
             }
         }
     });
@@ -149,6 +161,29 @@ function nextRound(roomCode) {
     room.currentRound++;
     room.rounds.push({ choices: {} });
     io.to(roomCode).emit('new-round', { roundNumber: room.currentRound });
+    // Auto-submit for bot players
+    submitBotChoices(roomCode);
+}
+function submitBotChoices(roomCode) {
+    var room = rooms[roomCode];
+    if (!room || room.state !== 'playing') return;
+    var round = room.rounds[room.currentRound - 1];
+    if (!round) return;
+    var submitted = false;
+    room.players.forEach(function(p) {
+        if (p.isBot && !round.choices[p.id]) {
+            round.choices[p.id] = Math.random() < 0.5 ? 'collaborate' : 'defect';
+            submitted = true;
+            // Notify opponent that bot has locked in
+            var pair = room.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
+            if (pair) {
+                var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
+                var opp = room.players.find(function(pl) { return pl.id === oppId; });
+                if (opp && opp.socketId) io.to(opp.socketId).emit('opponent-locked');
+            }
+        }
+    });
+    if (submitted) checkRoundComplete(roomCode);
 }
 function checkRoundComplete(roomCode) {
     var room = rooms[roomCode];
