@@ -213,7 +213,7 @@ function endGame(roomCode) {
         var pair = room.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
         var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
         var opp = room.players.find(function(pl) { return pl.id === oppId; });
-        return { id: p.id, name: p.name, score: room.scores[p.id], pairNumber: room.pairs.indexOf(pair) + 1, opponentName: opp ? opp.name : '?' };
+        return { id: p.id, name: p.isBot ? p.name + ' (Bot)' : p.name, score: room.scores[p.id], pairNumber: room.pairs.indexOf(pair) + 1, opponentName: opp ? (opp.isBot ? opp.name + ' (Bot)' : opp.name) : '?' };
     }).sort(function(a, b) { return b.score - a.score; });
     // Build allPairsHistory for CSV
     var allPairsHistory = [];
