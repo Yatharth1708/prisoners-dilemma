@@ -116,13 +116,23 @@ io.on('connection', function(socket) {
             var room = rooms[sd.roomCode];
             var player = room.players.find(function(p) { return p.id === sd.playerId; });
             var playerName = player ? player.name : 'A player';
+            // If the host leaves, close the room and disconnect everyone
+            if (room.hostSocketId === socket.id) {
+                io.to(sd.roomCode).emit('host-left', { name: playerName });
+                // Force-disconnect all remaining sockets in the room
+                room.players.forEach(function(p) {
+                    if (p.socketId && p.socketId !== socket.id) {
+                        var s = io.sockets.sockets.get(p.socketId);
+                        if (s) { s.leave(sd.roomCode); s.data = {}; }
+                    }
+                });
+                delete rooms[sd.roomCode];
+                io.emit('room-exists', false);
+                return;
+            }
             if (room.state === 'waiting') {
                 room.players = room.players.filter(function(p) { return p.id !== sd.playerId; });
                 delete room.scores[sd.playerId];
-                if (room.hostSocketId === socket.id) {
-                    if (room.players.length > 0) { room.hostSocketId = room.players[0].socketId; }
-                    else { delete rooms[sd.roomCode]; io.emit('room-exists', false); return; }
-                }
                 broadcastPlayerList(sd.roomCode);
             } else if (room.state === 'playing') {
                 // Mark player as bot instead of aborting game
