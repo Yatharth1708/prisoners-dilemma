@@ -40,9 +40,7 @@ function broadcastPlayerList(roomCode) {
     });
 }
 io.on('connection', function(socket) {
-    socket.emit('room-exists', Object.keys(rooms).length > 0);
     socket.on('create-room', function(data, callback) {
-        if (Object.keys(rooms).length > 0) return callback({ success: false, error: 'A room already exists. Please join the existing room.' });
         var code = generateRoomCode();
         var maxPlayers = parseInt(data && data.maxPlayers) || MAX_PLAYERS;
         if (maxPlayers < 2) maxPlayers = 2;
@@ -56,7 +54,6 @@ io.on('connection', function(socket) {
         socket.join(code);
         socket.data = { roomCode: code, playerId: playerId };
         callback({ success: true, roomCode: code, playerId: playerId });
-        io.emit('room-exists', true);
         broadcastPlayerList(code);
     });
     socket.on('join-room', function(data, callback) {
@@ -127,7 +124,6 @@ io.on('connection', function(socket) {
                     }
                 });
                 delete rooms[sd.roomCode];
-                io.emit('room-exists', false);
                 return;
             }
             if (room.state === 'waiting') {
@@ -254,7 +250,7 @@ function endGame(roomCode) {
     if (room.hostEmail) {
         sendResultsEmail(room.hostEmail, leaderboard, allPairsHistory, room.totalRounds);
     }
-    setTimeout(function() { delete rooms[roomCode]; io.emit('room-exists', false); }, 120000);
+    setTimeout(function() { delete rooms[roomCode]; }, 120000);
 }
 function generateCSV(leaderboard, allPairsHistory, totalRounds) {
     var pairs = {};
