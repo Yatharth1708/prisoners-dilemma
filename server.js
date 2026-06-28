@@ -63,10 +63,15 @@ io.on('connection', function(socket) {
         if (room.players.length >= room.maxPlayers) return callback({ success: false, error: 'Room is full (max ' + room.maxPlayers + ').' });
         if (room.state !== 'waiting') return callback({ success: false, error: 'Game already in progress.' });
         var trimName = data.playerName.trim();
-        var dup = room.players.some(function(p) { return p.name.toLowerCase() === trimName.toLowerCase(); });
-        if (dup) return callback({ success: false, error: 'Name already taken.' });
+        // Auto-disambiguate duplicate names by appending a numeric suffix.
+        var finalName = trimName;
+        var suffix = 2;
+        while (room.players.some(function(p) { return p.name.toLowerCase() === finalName.toLowerCase(); })) {
+            finalName = trimName + ' (' + suffix + ')';
+            suffix++;
+        }
         var playerId = 'P' + (room.players.length + 1);
-        room.players.push({ id: playerId, name: trimName, socketId: socket.id });
+        room.players.push({ id: playerId, name: finalName, socketId: socket.id });
         room.scores[playerId] = 0;
         socket.join(code);
         socket.data = { roomCode: code, playerId: playerId };
