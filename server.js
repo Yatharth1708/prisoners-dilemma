@@ -14,6 +14,10 @@ var PAYOFF = {
     defect: { collaborate: [5, 0], defect: [1, 1] },
 };
 var rooms = {};
+var REJOIN_GRACE_MS = 15000;
+function generateSessionToken() {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
 function generateRoomCode() {
     var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     var code = '';
@@ -48,12 +52,13 @@ io.on('connection', function(socket) {
         if (maxPlayers > 100) maxPlayers = 100;
         var room = createRoom(code, socket.id, maxPlayers);
         var playerId = 'P1';
-        room.players.push({ id: playerId, name: data.playerName.trim(), socketId: socket.id });
+        var sessionToken = generateSessionToken();
+        room.players.push({ id: playerId, name: data.playerName.trim(), socketId: socket.id, sessionToken: sessionToken });
         room.scores[playerId] = 0;
         rooms[code] = room;
         socket.join(code);
         socket.data = { roomCode: code, playerId: playerId };
-        callback({ success: true, roomCode: code, playerId: playerId });
+        callback({ success: true, roomCode: code, playerId: playerId, sessionToken: sessionToken });
         broadcastPlayerList(code);
     });
     socket.on('join-room', function(data, callback) {
@@ -71,11 +76,12 @@ io.on('connection', function(socket) {
             suffix++;
         }
         var playerId = 'P' + (room.players.length + 1);
-        room.players.push({ id: playerId, name: finalName, socketId: socket.id });
+        var sessionToken = generateSessionToken();
+        room.players.push({ id: playerId, name: finalName, socketId: socket.id, sessionToken: sessionToken });
         room.scores[playerId] = 0;
         socket.join(code);
         socket.data = { roomCode: code, playerId: playerId };
-        callback({ success: true, roomCode: code, playerId: playerId });
+        callback({ success: true, roomCode: code, playerId: playerId, sessionToken: sessionToken, playerName: finalName });
         broadcastPlayerList(code);
     });
     socket.on('start-game', function(data, callback) {
@@ -112,16 +118,61 @@ io.on('connection', function(socket) {
         }
         checkRoundComplete(sd.roomCode);
     });
+    socket.on('rejoin-room', function(data, callback) {
+        var code = (data && data.roomCode || '').toUpperCase().trim();
+        var room = rooms[code];
+        if (!room) return callback({ success: false, error: 'Room no longer exists.' });
+        if (!data || !data.sessionToken) return callback({ success: false, error: 'Missing session token.' });
+        var player = room.players.find(function(p) { return p.sessionToken === data.sessionToken; });
+        if (!player) return callback({ success: false, error: 'Session not found.' });
+        if (room.state !== 'waiting') return callback({ success: false, error: 'Game already started.' });
+        if (player.pendingDisconnect) { clearTimeout(player.pendingDisconnect); player.pendingDisconnect = null; }
+        player.socketId = socket.id;
+        var wasHost = room.players.length > 0 && room.players[0].id === player.id;
+        if (wasHost) room.hostSocketId = socket.id;
+        socket.join(code);
+        socket.data = { roomCode: code, playerId: player.id };
+        callback({ success: true, roomCode: code, playerId: player.id, playerName: player.name, isHost: wasHost, state: room.state, maxPlayers: room.maxPlayers });
+        broadcastPlayerList(code);
+    });
     socket.on('disconnect', function() {
         var sd = socket.data || {};
         if (sd.roomCode && rooms[sd.roomCode]) {
             var room = rooms[sd.roomCode];
             var player = room.players.find(function(p) { return p.id === sd.playerId; });
             var playerName = player ? player.name : 'A player';
-            // If the host leaves, close the room and disconnect everyone
-            if (room.hostSocketId === socket.id) {
+            var wasHost = room.hostSocketId === socket.id;
+            if (room.state === 'waiting') {
+                // Give the player a grace period to rejoin (e.g., after a page refresh).
+                if (player) {
+                    player.socketId = null;
+                    if (player.pendingDisconnect) clearTimeout(player.pendingDisconnect);
+                    player.pendingDisconnect = setTimeout(function() {
+                        var r = rooms[sd.roomCode];
+                        if (!r) return;
+                        var p = r.players.find(function(pl) { return pl.id === sd.playerId; });
+                        if (!p || p.socketId) return; // already rejoined
+                        if (wasHost) {
+                            io.to(sd.roomCode).emit('host-left', { name: playerName });
+                            r.players.forEach(function(pl) {
+                                if (pl.socketId) {
+                                    var s = io.sockets.sockets.get(pl.socketId);
+                                    if (s) { s.leave(sd.roomCode); s.data = {}; }
+                                }
+                            });
+                            delete rooms[sd.roomCode];
+                        } else {
+                            r.players = r.players.filter(function(pl) { return pl.id !== sd.playerId; });
+                            delete r.scores[sd.playerId];
+                            broadcastPlayerList(sd.roomCode);
+                        }
+                    }, REJOIN_GRACE_MS);
+                }
+                return;
+            }
+            // If the host leaves during gameplay, close the room and disconnect everyone
+            if (wasHost) {
                 io.to(sd.roomCode).emit('host-left', { name: playerName });
-                // Force-disconnect all remaining sockets in the room
                 room.players.forEach(function(p) {
                     if (p.socketId && p.socketId !== socket.id) {
                         var s = io.sockets.sockets.get(p.socketId);
@@ -131,11 +182,7 @@ io.on('connection', function(socket) {
                 delete rooms[sd.roomCode];
                 return;
             }
-            if (room.state === 'waiting') {
-                room.players = room.players.filter(function(p) { return p.id !== sd.playerId; });
-                delete room.scores[sd.playerId];
-                broadcastPlayerList(sd.roomCode);
-            } else if (room.state === 'playing') {
+            if (room.state === 'playing') {
                 // Mark player as bot instead of aborting game
                 if (player) {
                     player.isBot = true;
