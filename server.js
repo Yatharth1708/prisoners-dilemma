@@ -15,7 +15,7 @@ var PAYOFF = {
     defect: { collaborate: [5, 0], defect: [1, 1] },
 };
 var rooms = {};
-var REJOIN_GRACE_MS = 15000;
+var REJOIN_GRACE_MS = 60000;
 function generateSessionToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
@@ -193,6 +193,10 @@ io.on('connection', function(socket) {
         var room = rooms[sd.roomCode];
         var player = room.players.find(function(p) { return p.id === sd.playerId; });
         if (!player) return;
+        // Ignore stale disconnects: if a newer socket has already taken over for this player
+        // (e.g., page refresh or Socket.IO auto-reconnect raced ahead of the old socket's close),
+        // do NOT null out the new socketId or start the grace timer.
+        if (player.socketId && player.socketId !== socket.id) return;
         var playerName = player.name;
         var wasHost = room.hostSocketId === socket.id;
         player.socketId = null;
