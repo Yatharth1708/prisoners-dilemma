@@ -26,7 +26,7 @@ var PAYOFF = {
 };
 var rooms = {};
 var WAITING_GRACE_MS = 30 * 60 * 1000;
-var REJOIN_GRACE_MS = 5 * 60 * 1000;
+var REJOIN_GRACE_MS = 30 * 60 * 1000;
 function generateSessionToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
