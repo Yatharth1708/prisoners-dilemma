@@ -347,14 +347,20 @@ function submitBotChoices(roomCode) {
 }
 function checkRoundComplete(roomCode) {
     var room = rooms[roomCode];
+    if (!room || room.state !== 'playing') return;
     var round = room.rounds[room.currentRound - 1];
+    if (!round || round.resolved) return;
     var done = room.pairs.every(function(pair) { return round.choices[pair.playerA] && round.choices[pair.playerB]; });
+    // As soon as every pair has both choices in, stop the round timer and resolve immediately
+    // rather than waiting for it to expire.
     if (done) resolveRound(roomCode);
 }
 function resolveRound(roomCode) {
     var room = rooms[roomCode];
-    if (room.roundTimer) { clearTimeout(room.roundTimer); room.roundTimer = null; }
+    if (!room) return;
     var round = room.rounds[room.currentRound - 1];
+    if (!round || round.resolved) return; // idempotent: guard against timer/submit race
+    if (room.roundTimer) { clearTimeout(room.roundTimer); room.roundTimer = null; }
     round.resolved = true;
     room.pairs.forEach(function(pair) {
         var cA = round.choices[pair.playerA]; var cB = round.choices[pair.playerB];
