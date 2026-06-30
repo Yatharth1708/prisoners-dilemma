@@ -16,6 +16,7 @@ const io = new Server(server, {
     }
 });
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/keepalive', function(req, res) { res.type('text/plain').send('ok'); });
 var MAX_PLAYERS = 20;
 var TOTAL_ROUNDS = 20;
 var ROUND_DURATION_SEC = 10;
