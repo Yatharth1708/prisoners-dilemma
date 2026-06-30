@@ -25,6 +25,7 @@ var PAYOFF = {
     defect: { collaborate: [5, 0], defect: [1, 1] },
 };
 var rooms = {};
+var WAITING_GRACE_MS = 30 * 60 * 1000;
 var REJOIN_GRACE_MS = 5 * 60 * 1000;
 function generateSessionToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -253,7 +254,7 @@ io.on('connection', function(socket) {
                     delete r.scores[sd.playerId];
                     broadcastPlayerList(sd.roomCode);
                 }
-            }, REJOIN_GRACE_MS);
+            }, WAITING_GRACE_MS);
             return;
         }
         if (room.state === 'playing') {
