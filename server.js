@@ -11,7 +11,7 @@ const io = new Server(server, {
     pingTimeout: 60000,
     transports: ['websocket', 'polling'],
     connectionStateRecovery: {
-        maxDisconnectionDuration: 30 * 60 * 1000,
+        maxDisconnectionDuration: 5 * 60 * 1000,
         skipMiddlewares: true
     }
 });
@@ -25,8 +25,7 @@ var PAYOFF = {
     defect: { collaborate: [5, 0], defect: [1, 1] },
 };
 var rooms = {};
-var WAITING_GRACE_MS = 30 * 60 * 1000;   // lobby ghosts removed faster so host isn’t stuck on odd count
-var PLAYING_GRACE_MS = 30 * 60 * 1000;  // pairs are fixed once playing, safe to hold seat longer
+var REJOIN_GRACE_MS = 5 * 60 * 1000;
 function generateSessionToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
@@ -254,7 +253,7 @@ io.on('connection', function(socket) {
                     delete r.scores[sd.playerId];
                     broadcastPlayerList(sd.roomCode);
                 }
-            }, WAITING_GRACE_MS);
+            }, REJOIN_GRACE_MS);
             return;
         }
         if (room.state === 'playing') {
@@ -274,7 +273,7 @@ io.on('connection', function(socket) {
                     if (opp && opp.socketId) io.to(opp.socketId).emit('opponent-disconnected-bot', { name: playerName });
                 }
                 submitBotChoices(sd.roomCode);
-            }, PLAYING_GRACE_MS);
+            }, REJOIN_GRACE_MS);
         }
     });
 });
