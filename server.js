@@ -9,6 +9,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.static(path.join(__dirname, 'public')));
 var MAX_PLAYERS = 20;
 var TOTAL_ROUNDS = 20;
+var ROUND_DURATION_SEC = 10;
 var PAYOFF = {
     collaborate: { collaborate: [3, 3], defect: [0, 5] },
     defect: { collaborate: [5, 0], defect: [1, 1] },
@@ -25,7 +26,7 @@ function generateRoomCode() {
     return rooms[code] ? generateRoomCode() : code;
 }
 function createRoom(code, hostSocketId, maxPlayers) {
-    return { code: code, hostSocketId: hostSocketId, players: [], pairs: [], totalRounds: TOTAL_ROUNDS, maxPlayers: maxPlayers || MAX_PLAYERS, currentRound: 0, rounds: [], scores: {}, state: 'waiting' };
+    return { code: code, hostSocketId: hostSocketId, players: [], pairs: [], totalRounds: TOTAL_ROUNDS, roundDurationSec: ROUND_DURATION_SEC, maxPlayers: maxPlayers || MAX_PLAYERS, currentRound: 0, rounds: [], scores: {}, state: 'waiting' };
 }
 function shuffle(arr) {
     for (var i = arr.length - 1; i > 0; i--) {
@@ -96,6 +97,10 @@ io.on('connection', function(socket) {
         if (rounds < 1) rounds = 1;
         if (rounds > 100) rounds = 100;
         room.totalRounds = rounds;
+        var roundDuration = parseInt(data && data.roundDuration) || ROUND_DURATION_SEC;
+        if (roundDuration < 3) roundDuration = 3;
+        if (roundDuration > 120) roundDuration = 120;
+        room.roundDurationSec = roundDuration;
         room.hostEmail = (data && data.email) ? data.email.trim() : '';
         callback({ success: true });
         startGame(sd.roomCode);
@@ -221,9 +226,31 @@ function nextRound(roomCode) {
     var room = rooms[roomCode];
     room.currentRound++;
     room.rounds.push({ choices: {} });
-    io.to(roomCode).emit('new-round', { roundNumber: room.currentRound });
+    io.to(roomCode).emit('new-round', { roundNumber: room.currentRound, durationSec: room.roundDurationSec });
     // Auto-submit for bot players
     submitBotChoices(roomCode);
+    // Start round timer: when it expires, auto-submit random choices for any player who hasn't locked in.
+    if (room.roundTimer) clearTimeout(room.roundTimer);
+    var capturedRound = room.currentRound;
+    room.roundTimer = setTimeout(function() {
+        var r = rooms[roomCode];
+        if (!r || r.state !== 'playing' || r.currentRound !== capturedRound) return;
+        var round = r.rounds[r.currentRound - 1];
+        if (!round) return;
+        r.players.forEach(function(p) {
+            if (!round.choices[p.id]) {
+                round.choices[p.id] = Math.random() < 0.5 ? 'collaborate' : 'defect';
+                if (p.socketId) io.to(p.socketId).emit('choice-auto-submitted', { choice: round.choices[p.id] });
+                var pair = r.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
+                if (pair) {
+                    var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
+                    var opp = r.players.find(function(pl) { return pl.id === oppId; });
+                    if (opp && opp.socketId) io.to(opp.socketId).emit('opponent-locked');
+                }
+            }
+        });
+        checkRoundComplete(roomCode);
+    }, room.roundDurationSec * 1000);
 }
 function submitBotChoices(roomCode) {
     var room = rooms[roomCode];
@@ -254,6 +281,7 @@ function checkRoundComplete(roomCode) {
 }
 function resolveRound(roomCode) {
     var room = rooms[roomCode];
+    if (room.roundTimer) { clearTimeout(room.roundTimer); room.roundTimer = null; }
     var round = room.rounds[room.currentRound - 1];
     room.pairs.forEach(function(pair) {
         var cA = round.choices[pair.playerA]; var cB = round.choices[pair.playerB];
