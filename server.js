@@ -25,7 +25,7 @@ var PAYOFF = {
     defect: { collaborate: [5, 0], defect: [1, 1] },
 };
 var rooms = {};
-var WAITING_GRACE_MS = 30 * 60 * 1000;   // lobby ghosts removed faster so host isn’t stuck on odd count
+var WAITING_GRACE_MS = 30 * 60 * 1000;  // long lobby grace so refreshing players aren't dropped before start
 var PLAYING_GRACE_MS = 30 * 60 * 1000;  // pairs are fixed once playing, safe to hold seat longer
 function generateSessionToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
