@@ -5,7 +5,16 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+    cors: { origin: '*' },
+    pingInterval: 25000,
+    pingTimeout: 60000,
+    transports: ['websocket', 'polling'],
+    connectionStateRecovery: {
+        maxDisconnectionDuration: 5 * 60 * 1000,
+        skipMiddlewares: true
+    }
+});
 app.use(express.static(path.join(__dirname, 'public')));
 var MAX_PLAYERS = 20;
 var TOTAL_ROUNDS = 20;
@@ -15,7 +24,7 @@ var PAYOFF = {
     defect: { collaborate: [5, 0], defect: [1, 1] },
 };
 var rooms = {};
-var REJOIN_GRACE_MS = 60000;
+var REJOIN_GRACE_MS = 5 * 60 * 1000;
 function generateSessionToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
@@ -45,6 +54,20 @@ function broadcastPlayerList(roomCode) {
     });
 }
 io.on('connection', function(socket) {
+    if (socket.recovered) {
+        // Socket.IO transparently restored socket.data, socket.rooms, and missed packets.
+        var sd2 = socket.data || {};
+        if (sd2.roomCode && rooms[sd2.roomCode]) {
+            var r2 = rooms[sd2.roomCode];
+            var p2 = r2.players.find(function(p) { return p.id === sd2.playerId; });
+            if (p2) {
+                if (p2.pendingDisconnect) { clearTimeout(p2.pendingDisconnect); p2.pendingDisconnect = null; }
+                p2.socketId = socket.id;
+                if (r2.players[0] && r2.players[0].id === p2.id) r2.hostSocketId = socket.id;
+                console.log('[room ' + sd2.roomCode + '] socket recovered for ' + p2.name);
+            }
+        }
+    }
     socket.on('create-room', function(data, callback) {
         var code = generateRoomCode();
         var maxPlayers = parseInt(data && data.maxPlayers) || MAX_PLAYERS;
@@ -209,15 +232,22 @@ io.on('connection', function(socket) {
                 var p = r.players.find(function(pl) { return pl.id === sd.playerId; });
                 if (!p || p.socketId) return; // already rejoined
                 if (wasHost) {
-                    io.to(sd.roomCode).emit('host-left', { name: playerName });
-                    r.players.forEach(function(pl) {
-                        if (pl.socketId) {
-                            var s = io.sockets.sockets.get(pl.socketId);
-                            if (s) { s.leave(sd.roomCode); s.data = {}; }
-                        }
-                    });
-                    delete rooms[sd.roomCode];
+                    // Host grace expired. Instead of killing the whole room, promote the next
+                    // player in join order to host so everyone else can continue. The room is
+                    // only torn down if no players remain.
+                    r.players = r.players.filter(function(pl) { return pl.id !== sd.playerId; });
+                    delete r.scores[sd.playerId];
+                    if (r.players.length === 0) {
+                        console.log('[room ' + sd.roomCode + '] empty after host left; deleting.');
+                        delete rooms[sd.roomCode];
+                        return;
+                    }
+                    var newHost = r.players[0];
+                    r.hostSocketId = newHost.socketId || null;
+                    console.log('[room ' + sd.roomCode + '] host ' + playerName + ' did not return; promoted ' + newHost.name + ' to host.');
+                    broadcastPlayerList(sd.roomCode);
                 } else {
+                    console.log('[room ' + sd.roomCode + '] player ' + playerName + ' did not return; removed from lobby.');
                     r.players = r.players.filter(function(pl) { return pl.id !== sd.playerId; });
                     delete r.scores[sd.playerId];
                     broadcastPlayerList(sd.roomCode);
