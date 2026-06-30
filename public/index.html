@@ -197,9 +197,9 @@ var socket=io({reconnection:true,reconnectionAttempts:Infinity,reconnectionDelay
 function stopRoundTimer(){if(roundTimerInterval){clearInterval(roundTimerInterval);roundTimerInterval=null}var el=document.getElementById('roundTimer');if(el)el.style.display='none'}
 function startRoundTimer(sec){stopRoundTimer();var el=document.getElementById('roundTimer');if(!el||!sec||sec<=0)return;var remaining=sec;el.style.display='inline-block';el.classList.remove('warn','crit');el.textContent=remaining+'s';var tick=function(){remaining--;if(remaining<=0){el.textContent='0s';el.classList.add('crit');stopRoundTimer();autoLockOnTimeout();return}el.textContent=remaining+'s';el.classList.remove('warn','crit');if(remaining<=3)el.classList.add('crit');else if(remaining<=5)el.classList.add('warn')};roundTimerInterval=setInterval(tick,1000)}
 function autoLockOnTimeout(){if(locked)return;if(!currentChoice){currentChoice=Math.random()<0.5?'collaborate':'defect';document.getElementById('cardCollab').className='cc';document.getElementById('cardDefect').className='cc';if(currentChoice==='collaborate')document.getElementById('cardCollab').classList.add('sc');else document.getElementById('cardDefect').classList.add('sd')}lockChoice()}
-function saveSession(){try{sessionStorage.setItem('dilemma-session',JSON.stringify({roomCode:document.getElementById('displayRoomCode').textContent,token:sessionToken,name:myName,isHost:isHost}))}catch(e){}}
-function clearSession(){try{sessionStorage.removeItem('dilemma-session')}catch(e){}sessionToken=null}
-function loadSession(){try{var s=sessionStorage.getItem('dilemma-session');return s?JSON.parse(s):null}catch(e){return null}}
+function saveSession(){try{localStorage.setItem('dilemma-session',JSON.stringify({roomCode:document.getElementById('displayRoomCode').textContent,token:sessionToken,name:myName,isHost:isHost}))}catch(e){}}
+function clearSession(){try{localStorage.removeItem('dilemma-session');sessionStorage.removeItem('dilemma-session')}catch(e){}sessionToken=null}
+function loadSession(){try{var s=localStorage.getItem('dilemma-session')||sessionStorage.getItem('dilemma-session');return s?JSON.parse(s):null}catch(e){return null}}
 var inActiveRoom=false;
 function beforeUnloadHandler(e){if(!inActiveRoom)return;var msg='Refreshing or leaving will take you out of the room. Are you sure?';e.preventDefault();e.returnValue=msg;return msg}
 window.addEventListener('beforeunload',beforeUnloadHandler);
