@@ -130,79 +130,115 @@ io.on('connection', function(socket) {
         if (!data || !data.sessionToken) return callback({ success: false, error: 'Missing session token.' });
         var player = room.players.find(function(p) { return p.sessionToken === data.sessionToken; });
         if (!player) return callback({ success: false, error: 'Session not found.' });
-        if (room.state !== 'waiting') return callback({ success: false, error: 'Game already started.' });
+        if (room.state === 'finished') return callback({ success: false, error: 'Game already finished.' });
         if (player.pendingDisconnect) { clearTimeout(player.pendingDisconnect); player.pendingDisconnect = null; }
         player.socketId = socket.id;
+        player.isBot = false;
         var wasHost = room.players.length > 0 && room.players[0].id === player.id;
         if (wasHost) room.hostSocketId = socket.id;
         socket.join(code);
         socket.data = { roomCode: code, playerId: player.id };
-        callback({ success: true, roomCode: code, playerId: player.id, playerName: player.name, isHost: wasHost, state: room.state, maxPlayers: room.maxPlayers });
-        broadcastPlayerList(code);
+        if (room.state === 'waiting') {
+            callback({ success: true, state: 'waiting', roomCode: code, playerId: player.id, playerName: player.name, isHost: wasHost, maxPlayers: room.maxPlayers });
+            broadcastPlayerList(code);
+            return;
+        }
+        // playing — send full snapshot so client can restore the game screen.
+        var pair = room.pairs.find(function(pr) { return pr.playerA === player.id || pr.playerB === player.id; });
+        var pairNumber = pair ? room.pairs.indexOf(pair) + 1 : 0;
+        var oppId = pair ? (pair.playerA === player.id ? pair.playerB : pair.playerA) : null;
+        var opp = oppId ? room.players.find(function(pl) { return pl.id === oppId; }) : null;
+        var history = [];
+        for (var i = 0; i < room.rounds.length; i++) {
+            var rr = room.rounds[i];
+            if (!rr.resolved) continue;
+            var myC = rr.choices[player.id];
+            var opC = oppId ? rr.choices[oppId] : null;
+            if (!myC || !opC) continue;
+            var pts = PAYOFF[myC][opC];
+            history.push({ round: i + 1, myChoice: myC, opChoice: opC, myPts: pts[0], opPts: pts[1] });
+        }
+        var curRound = room.rounds[room.currentRound - 1];
+        var roundActive = !!(curRound && !curRound.resolved && room.roundTimer);
+        var alreadySubmitted = !!(curRound && curRound.choices[player.id]);
+        var remainingMs = 0;
+        if (roundActive && curRound.startedAt) {
+            remainingMs = Math.max(0, room.roundDurationSec * 1000 - (Date.now() - curRound.startedAt));
+        }
+        callback({
+            success: true,
+            state: 'playing',
+            roomCode: code,
+            playerId: player.id,
+            playerName: player.name,
+            isHost: wasHost,
+            pairNumber: pairNumber,
+            totalPairs: room.pairs.length,
+            totalPlayers: room.players.length,
+            opponent: opp ? { id: opp.id, name: opp.name, isBot: !!opp.isBot } : null,
+            totalRounds: room.totalRounds,
+            currentRound: room.currentRound,
+            history: history,
+            myScore: room.scores[player.id] || 0,
+            oppScore: oppId ? (room.scores[oppId] || 0) : 0,
+            roundActive: roundActive,
+            alreadySubmitted: alreadySubmitted,
+            roundDurationSec: room.roundDurationSec,
+            remainingMs: remainingMs
+        });
     });
     socket.on('disconnect', function() {
         var sd = socket.data || {};
-        if (sd.roomCode && rooms[sd.roomCode]) {
-            var room = rooms[sd.roomCode];
-            var player = room.players.find(function(p) { return p.id === sd.playerId; });
-            var playerName = player ? player.name : 'A player';
-            var wasHost = room.hostSocketId === socket.id;
-            if (room.state === 'waiting') {
-                // Give the player a grace period to rejoin (e.g., after a page refresh).
-                if (player) {
-                    player.socketId = null;
-                    if (player.pendingDisconnect) clearTimeout(player.pendingDisconnect);
-                    player.pendingDisconnect = setTimeout(function() {
-                        var r = rooms[sd.roomCode];
-                        if (!r) return;
-                        var p = r.players.find(function(pl) { return pl.id === sd.playerId; });
-                        if (!p || p.socketId) return; // already rejoined
-                        if (wasHost) {
-                            io.to(sd.roomCode).emit('host-left', { name: playerName });
-                            r.players.forEach(function(pl) {
-                                if (pl.socketId) {
-                                    var s = io.sockets.sockets.get(pl.socketId);
-                                    if (s) { s.leave(sd.roomCode); s.data = {}; }
-                                }
-                            });
-                            delete rooms[sd.roomCode];
-                        } else {
-                            r.players = r.players.filter(function(pl) { return pl.id !== sd.playerId; });
-                            delete r.scores[sd.playerId];
-                            broadcastPlayerList(sd.roomCode);
+        if (!sd.roomCode || !rooms[sd.roomCode]) return;
+        var room = rooms[sd.roomCode];
+        var player = room.players.find(function(p) { return p.id === sd.playerId; });
+        if (!player) return;
+        var playerName = player.name;
+        var wasHost = room.hostSocketId === socket.id;
+        player.socketId = null;
+        if (player.pendingDisconnect) clearTimeout(player.pendingDisconnect);
+        if (room.state === 'waiting') {
+            // Grace period to allow rejoin after refresh / transient network blip.
+            player.pendingDisconnect = setTimeout(function() {
+                var r = rooms[sd.roomCode];
+                if (!r) return;
+                var p = r.players.find(function(pl) { return pl.id === sd.playerId; });
+                if (!p || p.socketId) return; // already rejoined
+                if (wasHost) {
+                    io.to(sd.roomCode).emit('host-left', { name: playerName });
+                    r.players.forEach(function(pl) {
+                        if (pl.socketId) {
+                            var s = io.sockets.sockets.get(pl.socketId);
+                            if (s) { s.leave(sd.roomCode); s.data = {}; }
                         }
-                    }, REJOIN_GRACE_MS);
+                    });
+                    delete rooms[sd.roomCode];
+                } else {
+                    r.players = r.players.filter(function(pl) { return pl.id !== sd.playerId; });
+                    delete r.scores[sd.playerId];
+                    broadcastPlayerList(sd.roomCode);
                 }
-                return;
-            }
-            // If the host leaves during gameplay, close the room and disconnect everyone
-            if (wasHost) {
-                io.to(sd.roomCode).emit('host-left', { name: playerName });
-                room.players.forEach(function(p) {
-                    if (p.socketId && p.socketId !== socket.id) {
-                        var s = io.sockets.sockets.get(p.socketId);
-                        if (s) { s.leave(sd.roomCode); s.data = {}; }
-                    }
-                });
-                delete rooms[sd.roomCode];
-                return;
-            }
-            if (room.state === 'playing') {
-                // Mark player as bot instead of aborting game
-                if (player) {
-                    player.isBot = true;
-                    player.socketId = null;
-                }
-                // Notify opponent
-                var pair = room.pairs.find(function(pr) { return pr.playerA === sd.playerId || pr.playerB === sd.playerId; });
+            }, REJOIN_GRACE_MS);
+            return;
+        }
+        if (room.state === 'playing') {
+            // Grace period before botifying the player; the round timer will still cover any
+            // un-submitted choice via random fallback. Host is treated like any other player
+            // during play so transient disconnects don't kill the room.
+            player.pendingDisconnect = setTimeout(function() {
+                var r = rooms[sd.roomCode];
+                if (!r || r.state !== 'playing') return;
+                var p = r.players.find(function(pl) { return pl.id === sd.playerId; });
+                if (!p || p.socketId) return; // already rejoined
+                p.isBot = true;
+                var pair = r.pairs.find(function(pr) { return pr.playerA === p.id || pr.playerB === p.id; });
                 if (pair) {
-                    var oppId = pair.playerA === sd.playerId ? pair.playerB : pair.playerA;
-                    var opp = room.players.find(function(p) { return p.id === oppId; });
+                    var oppId = pair.playerA === p.id ? pair.playerB : pair.playerA;
+                    var opp = r.players.find(function(pl) { return pl.id === oppId; });
                     if (opp && opp.socketId) io.to(opp.socketId).emit('opponent-disconnected-bot', { name: playerName });
                 }
-                // If current round is active, submit random choice for the bot
                 submitBotChoices(sd.roomCode);
-            }
+            }, REJOIN_GRACE_MS);
         }
     });
 });
@@ -225,7 +261,7 @@ function startGame(roomCode) {
 function nextRound(roomCode) {
     var room = rooms[roomCode];
     room.currentRound++;
-    room.rounds.push({ choices: {} });
+    room.rounds.push({ choices: {}, startedAt: Date.now(), resolved: false });
     io.to(roomCode).emit('new-round', { roundNumber: room.currentRound, durationSec: room.roundDurationSec });
     // Auto-submit for bot players
     submitBotChoices(roomCode);
@@ -283,6 +319,7 @@ function resolveRound(roomCode) {
     var room = rooms[roomCode];
     if (room.roundTimer) { clearTimeout(room.roundTimer); room.roundTimer = null; }
     var round = room.rounds[room.currentRound - 1];
+    round.resolved = true;
     room.pairs.forEach(function(pair) {
         var cA = round.choices[pair.playerA]; var cB = round.choices[pair.playerB];
         var pts = PAYOFF[cA][cB];
